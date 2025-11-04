@@ -305,6 +305,11 @@ public sealed class ResilientFileSystemMonitor : IDisposable
             _state = MonitorState.Watching;
             StopPollingTimer();
             
+            // Take a fresh snapshot and reconcile to detect any changes that occurred
+            // while we were in polling mode or during the transition
+            var currentSnapshot = Snapshot(_rootPath);
+            Reconcile(currentSnapshot);
+            
             EnqueueEvent(new EventEntry(EventType.ModeChanged, null!, ModeArgs: new ModeChangedEventArgs(WatcherMode.Native, "watcher started")));
         }
         catch (Exception ex)
