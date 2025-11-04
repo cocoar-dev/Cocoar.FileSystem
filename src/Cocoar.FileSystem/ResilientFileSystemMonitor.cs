@@ -520,6 +520,14 @@ public sealed class ResilientFileSystemMonitor : IDisposable
                     if (_options.AutoRecoverFromErrors)
                     {
                         TryStartFileSystemWatcher();
+                        
+                        // Re-snapshot and reconcile after starting watcher to catch any files
+                        // that appeared between initial snapshot and watcher start
+                        if (_state == MonitorState.Watching)
+                        {
+                            var postWatcherSnapshot = Snapshot(_rootPath);
+                            Reconcile(postWatcherSnapshot);
+                        }
                     }
                 }
                 catch (Exception ex)
