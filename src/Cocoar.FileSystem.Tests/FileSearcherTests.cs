@@ -308,6 +308,43 @@ public class FileSearcherTests : IDisposable
     }
 
     [Fact]
+    public void SearchBuilder_ImplementsIEnumerable_CanUseForeach()
+    {
+        var file1 = Path.Combine(_testRoot, "test1.txt");
+        var file2 = Path.Combine(_testRoot, "test2.txt");
+        File.WriteAllText(file1, "content1");
+        File.WriteAllText(file2, "content2");
+
+        var builder = FileSearcher.InDirectory(_testRoot).WithPattern("*.txt");
+        
+        var collected = new List<string>();
+        foreach (var file in builder)
+        {
+            collected.Add(file);
+        }
+
+        Assert.Equal(2, collected.Count);
+        Assert.Contains(file1, collected);
+        Assert.Contains(file2, collected);
+    }
+
+    [Fact]
+    public void SearchBuilder_ImplementsIEnumerable_CanUseLinqDirectly()
+    {
+        var file1 = Path.Combine(_testRoot, "test1.txt");
+        var file2 = Path.Combine(_testRoot, "test2.log");
+        File.WriteAllText(file1, "content1");
+        File.WriteAllText(file2, "content2");
+
+        var builder = FileSearcher.InDirectory(_testRoot);
+        
+        var txtFiles = builder.Where(f => f.EndsWith(".txt", StringComparison.Ordinal)).ToList();
+
+        Assert.Single(txtFiles);
+        Assert.Equal(file1, txtFiles[0]);
+    }
+
+    [Fact]
     public void EnumerateFiles_WithManyFiles_ShouldHandleEfficiently()
     {
         const int fileCount = 100;

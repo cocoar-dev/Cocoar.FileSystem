@@ -1,9 +1,11 @@
+using System.Collections;
+
 namespace Cocoar.FileSystem;
 
 /// <summary>
 /// Fluent builder for configuring and executing file system searches.
 /// </summary>
-public sealed class SearchBuilder
+public sealed class SearchBuilder : IEnumerable<string>
 {
     private readonly string _searchPath;
     private string _searchPattern = "*";
@@ -120,4 +122,15 @@ public sealed class SearchBuilder
     /// </summary>
     /// <returns>The full path of the first matching file, or null if none found.</returns>
     public string? FirstOrDefault() => Enumerate().FirstOrDefault();
+
+    /// <summary>
+    /// Returns an enumerator that iterates through the matching files.
+    /// This enables foreach and LINQ support directly on the builder.
+    /// </summary>
+    public IEnumerator<string> GetEnumerator() => Enumerate().GetEnumerator();
+
+    /// <summary>
+    /// Returns an enumerator that iterates through the matching files.
+    /// </summary>
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
