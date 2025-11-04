@@ -217,6 +217,43 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     [Obsolete("Use !IsUsingWatcher instead")]
     public bool IsPolling => !IsUsingWatcher;
 
+    /// <summary>
+    /// Creates a new fluent builder for configuring a file system monitor for the specified directory.
+    /// </summary>
+    /// <param name="path">The directory path to monitor.</param>
+    /// <returns>A fluent builder for configuring the monitor.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="path"/> is null.</exception>
+    /// <exception cref="ArgumentException">When <paramref name="path"/> is empty or whitespace.</exception>
+    /// <example>
+    /// <code>
+    /// var monitor = ResilientFileSystemMonitor
+    ///     .Watch(@"C:\config")
+    ///     .WithFilter("*.json")
+    ///     .WithDebounce(100)
+    ///     .OnChanged(OnConfigChanged)
+    ///     .Build();
+    /// </code>
+    /// </example>
+    public static MonitorBuilder Watch(string path) => new MonitorBuilder(path);
+
+    /// <summary>
+    /// Creates a new fluent builder for configuring a file system monitor for the specified directory with a filter.
+    /// </summary>
+    /// <param name="path">The directory path to monitor.</param>
+    /// <param name="filter">The file filter pattern (e.g., "*.json", "*.txt").</param>
+    /// <returns>A fluent builder for configuring the monitor.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="path"/> or <paramref name="filter"/> is null.</exception>
+    /// <exception cref="ArgumentException">When <paramref name="path"/> or <paramref name="filter"/> is empty or whitespace.</exception>
+    /// <example>
+    /// <code>
+    /// var monitor = ResilientFileSystemMonitor
+    ///     .Watch(@"C:\config", "*.json")
+    ///     .WithDebounce(100)
+    ///     .Build();
+    /// </code>
+    /// </example>
+    public static MonitorBuilder Watch(string path, string filter) => new MonitorBuilder(path).WithFilter(filter);
+
     public ResilientFileSystemMonitor(Options options)
     {
         ArgumentNullException.ThrowIfNull(options);

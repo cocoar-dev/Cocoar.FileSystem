@@ -24,47 +24,59 @@ dotnet add package Cocoar.FileSystem
 
 ## 📖 Quick Start
 
-### Basic File Monitoring
+### Basic File Monitoring (Fluent API)
 
 ```csharp
 using Cocoar.FileSystem;
 
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\configs",
-    Filter = "*.json",
-    EnablePollingFallback = true,
-    PollingInterval = TimeSpan.FromSeconds(5)
-});
-
-monitor.Changed += (sender, e) => 
-{
-    Console.WriteLine($"File changed: {e.Name}");
-    ReloadConfiguration(e.FullPath);
-};
-
-monitor.Created += (sender, e) => 
-{
-    Console.WriteLine($"File created: {e.Name}");
-};
+// Simple, clean fluent API
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\configs", "*.json")
+    .OnChanged((sender, e) => 
+    {
+        Console.WriteLine($"File changed: {e.Name}");
+        ReloadConfiguration(e.FullPath);
+    })
+    .OnCreated((sender, e) => 
+    {
+        Console.WriteLine($"File created: {e.Name}");
+    })
+    .OnRenamed((sender, e) => 
+    {
+        Console.WriteLine($"File renamed: {e.OldName} → {e.Name}");
+    })
+    .Build();
 ```
 
 ### With Debouncing
 
 ```csharp
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data", "*.txt")
+    .WithDebounce(500) // milliseconds - only fire once per file per 500ms
+    .OnChanged((sender, e) => 
+    {
+        // This will only fire once even if file is saved multiple times rapidly
+        ProcessFile(e.FullPath);
+    })
+    .Build();
+```
+
+### Options Pattern (Alternative)
+
+You can still use the options pattern for configuration or serialization scenarios:
+
+```csharp
 var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
 {
-    Path = @"C:\data",
-    Filter = "*.txt",
+    Path = @"C:\configs",
+    Filter = "*.json",
     EnablePollingFallback = true,
-    DebounceTime = TimeSpan.FromMilliseconds(500) // Only fire once per file per 500ms
+    PollingInterval = TimeSpan.FromSeconds(5),
+    DebounceTime = TimeSpan.FromMilliseconds(500)
 });
 
-monitor.Changed += (sender, e) => 
-{
-    // This will only fire once even if file is saved multiple times rapidly
-    ProcessFile(e.FullPath);
-};
+monitor.Changed += (sender, e) => ReloadConfiguration(e.FullPath);
 ```
 
 ### Reactive Stream (ChannelReader)
@@ -72,10 +84,9 @@ monitor.Changed += (sender, e) =>
 For reactive scenarios, you can consume all events as a unified ordered stream:
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data"
-});
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
 
 // Consume events from the channel - all events in order!
 await foreach (var evt in monitor.Events.ReadAllAsync(cancellationToken))
@@ -121,15 +132,15 @@ await foreach (var evt in monitor.Events.ReadAllAsync()
 ```
 
 
-### High-Performance File Search
+### High-Performance File Search (Fluent API)
 
 ```csharp
 using Cocoar.FileSystem;
 
 // Simple search - all text files
-var files = FileSearcher.EnumerateFiles(
-    new DirectoryInfo(@"C:\projects"),
-    "*.txt");
+var files = FileSearcher
+    .Search(@"C:\projects", "*.txt")
+    .ToList();
 
 foreach (var file in files)
 {
@@ -137,11 +148,11 @@ foreach (var file in files)
 }
 
 // With depth limit and excluded folders
-var codeFiles = FileSearcher.EnumerateFiles(
-    new DirectoryInfo(@"C:\repos\myproject"),
-    "*.cs",
-    excludedFolders: new HashSet<string> { "bin", "obj", "node_modules", ".git" },
-    maxDepth: 5);
+var codeFiles = FileSearcher
+    .Search(@"C:\repos\myproject", "*.cs")
+    .Excluding("bin", "obj", "node_modules", ".git")
+    .WithMaxDepth(5)
+    .ToList();
 
 foreach (var file in codeFiles)
 {
@@ -149,39 +160,62 @@ foreach (var file in codeFiles)
 }
 
 // Lazy evaluation - efficient for large directory trees
-var largeSearch = FileSearcher.EnumerateFiles(
-    new DirectoryInfo(@"C:\large-directory"),
-    "*");
+var firstTen = FileSearcher
+    .InDirectory(@"C:\large-directory")
+    .Take(10)
+    .ToList();
 
-// Only enumerates first 10 files
-var firstTen = largeSearch.Take(10).ToList();
+// Current directory only (no recursion)
+var localFiles = FileSearcher
+    .Search(@"C:\temp", "*.log")
+    .InCurrentDirectoryOnly()
+    .ToArray();
+
+// Check if any files exist
+bool hasConfig = FileSearcher
+    .Search(@"C:\config", "*.json")
+    .Any();
+```
+
+### Direct API (Alternative)
+
+You can also use the direct API for more control:
+
+```csharp
+// Simple search - all text files
+var files = FileSearcher.EnumerateFiles(
+    new DirectoryInfo(@"C:\projects"),
+    "*.txt");
+
+// With depth limit and excluded folders
+var codeFiles = FileSearcher.EnumerateFiles(
+    new DirectoryInfo(@"C:\repos\myproject"),
+    "*.cs",
+    excludedFolders: new HashSet<string> { "bin", "obj", "node_modules", ".git" },
+    maxDepth: 5);
 ```
 
 ### Monitor Mode Changes (Observability)
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data",
-    EnablePollingFallback = true
-});
-
-monitor.ModeChanged += (sender, e) => 
-{
-    Console.WriteLine($"Monitor switched to {e.NewMode}: {e.Reason}");
-};
-
-monitor.Error += (sender, e) => 
-{
-    Console.WriteLine($"Monitor error: {e.GetException().Message}");
-};
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .OnModeChanged((sender, e) => 
+    {
+        Console.WriteLine($"Monitor switched to {e.NewMode}: {e.Reason}");
+    })
+    .OnError((sender, e) => 
+    {
+        Console.WriteLine($"Monitor error: {e.GetException().Message}");
+    })
+    .Build();
 
 // Check current state
-if (monitor.IsWatcherActive)
+if (monitor.IsUsingWatcher)
 {
     Console.WriteLine("Using efficient FileSystemWatcher");
 }
-else if (monitor.IsPolling)
+else
 {
     Console.WriteLine("Using polling fallback");
 }
@@ -227,7 +261,9 @@ All operations are thread-safe. Events are raised sequentially on a background t
 Always dispose when done:
 
 ```csharp
-using var monitor = new ResilientFileSystemMonitor(options);
+using var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
 // Use monitor...
 // Automatically disposed at end of scope
 ```

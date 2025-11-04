@@ -25,6 +25,7 @@ public class ConfigurationService
         _monitor.Changed += OnConfigChanged;
         _monitor.Created += OnConfigChanged;
         _monitor.Deleted += OnConfigDeleted;
+        _monitor.Renamed += OnConfigRenamed;
     }
     
     private void OnConfigChanged(object? sender, FileSystemEventArgs e)
@@ -37,6 +38,13 @@ public class ConfigurationService
     {
         Console.WriteLine($"Configuration deleted: {e.FullPath}");
         RemoveConfiguration(e.FullPath);
+    }
+    
+    private void OnConfigRenamed(object? sender, RenamedEventArgs e)
+    {
+        Console.WriteLine($"Configuration renamed: {e.OldFullPath} → {e.FullPath}");
+        RemoveConfiguration(e.OldFullPath);
+        ReloadConfiguration(e.FullPath);
     }
     
     private void ReloadConfiguration(string filePath)
@@ -173,6 +181,7 @@ public class NetworkShareMonitor
         monitor.Changed += (s, e) => Console.WriteLine($"Changed: {e.Name}");
         monitor.Created += (s, e) => Console.WriteLine($"Created: {e.Name}");
         monitor.Deleted += (s, e) => Console.WriteLine($"Deleted: {e.Name}");
+        monitor.Renamed += (s, e) => Console.WriteLine($"Renamed: {e.OldName} → {e.Name}");
         
         monitor.Error += (s, e) => 
         {

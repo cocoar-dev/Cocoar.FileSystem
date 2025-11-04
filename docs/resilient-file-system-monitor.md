@@ -7,12 +7,69 @@ A production-ready FileSystemWatcher replacement with automatic fallback, error 
 - ✅ **Automatic Fallback**: Switches to polling when FileSystemWatcher fails or directory doesn't exist
 - ✅ **Auto-Recovery**: Handles directory disappearing/reappearing, permission errors, watcher crashes
 - ✅ **Debouncing**: Optional built-in debouncing to reduce noise from rapid file changes
-- ✅ **Configurable**: Opt-in to features you need via Options pattern
+- ✅ **Fluent API**: Clean, discoverable API with method chaining
+- ✅ **Options Pattern**: Alternative configuration for serialization scenarios
 - ✅ **Observable**: Know current state (watcher vs polling) via properties and events
 
 ## Usage Examples
 
-### Basic Usage (Resilient Config File Monitoring)
+### Basic Usage (Fluent API)
+
+```csharp
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\configs", "*.json")
+    .OnChanged((sender, e) => 
+    {
+        Console.WriteLine($"File changed: {e.Name}");
+        ReloadConfiguration(e.FullPath);
+    })
+    .OnCreated((sender, e) => 
+    {
+        Console.WriteLine($"File created: {e.Name}");
+    })
+    .OnRenamed((sender, e) => 
+    {
+        Console.WriteLine($"File renamed: {e.OldName} → {e.Name}");
+    })
+    .Build();
+```
+
+### With Debouncing (Reduce Noise)
+
+```csharp
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certificates", "*.pfx")
+    .WithDebounce(500) // milliseconds - only fire once per file per 500ms
+    .OnChanged((sender, e) => 
+    {
+        // This will only fire once even if file is saved multiple times rapidly
+        RefreshCertificateCache();
+    })
+    .Build();
+```
+
+### Advanced Configuration
+
+```csharp
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .WithFilter("*.txt")
+    .WithDebounce(TimeSpan.FromMilliseconds(500))
+    .WithPollingFallback(TimeSpan.FromSeconds(3))
+    .WithHealthCheckInterval(TimeSpan.FromSeconds(1))
+    .WithAuditInterval(TimeSpan.FromMinutes(1))
+    .IncludeSubdirectories(true)
+    .OnCreated(OnFileCreated)
+    .OnChanged(OnFileChanged)
+    .OnDeleted(OnFileDeleted)
+    .OnError(OnMonitorError)
+    .OnModeChanged(OnModeChanged)
+    .Build();
+```
+
+### Options Pattern (Alternative)
+
+For configuration files or when you need to serialize options:
 
 ```csharp
 var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
@@ -20,64 +77,34 @@ var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Opti
     Path = @"C:\configs",
     Filter = "*.json",
     EnablePollingFallback = true,
-    PollingInterval = TimeSpan.FromSeconds(5)
+    PollingInterval = TimeSpan.FromSeconds(5),
+    DebounceTime = TimeSpan.FromMilliseconds(500)
 });
 
-monitor.Changed += (sender, e) => 
-{
-    Console.WriteLine($"File changed: {e.Name}");
-    ReloadConfiguration(e.FullPath);
-};
-
-monitor.Created += (sender, e) => 
-{
-    Console.WriteLine($"File created: {e.Name}");
-};
-```
-
-### With Debouncing (Reduce Noise)
-
-```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\certificates",
-    Filter = "*.pfx",
-    EnablePollingFallback = true,
-    DebounceTime = TimeSpan.FromMilliseconds(500) // Only fire once per file per 500ms
-});
-
-monitor.Changed += (sender, e) => 
-{
-    // This will only fire once even if file is saved multiple times rapidly
-    RefreshCertificateCache();
-};
+monitor.Changed += (sender, e) => ReloadConfiguration(e.FullPath);
 ```
 
 ### Monitor Mode Changes (Observability)
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data",
-    EnablePollingFallback = true
-});
-
-monitor.ModeChanged += (sender, e) => 
-{
-    _logger.LogInformation($"Monitor switched to {e.NewMode}: {e.Reason}");
-};
-
-monitor.Error += (sender, e) => 
-{
-    _logger.LogWarning($"Monitor error: {e.GetException().Message}");
-};
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .OnModeChanged((sender, e) => 
+    {
+        _logger.LogInformation($"Monitor switched to {e.NewMode}: {e.Reason}");
+    })
+    .OnError((sender, e) => 
+    {
+        _logger.LogWarning($"Monitor error: {e.GetException().Message}");
+    })
+    .Build();
 
 // Check current state
-if (monitor.IsWatcherActive)
+if (monitor.IsUsingWatcher)
 {
     Console.WriteLine("Using efficient FileSystemWatcher");
 }
-else if (monitor.IsPolling)
+else
 {
     Console.WriteLine("Using polling fallback");
 }
