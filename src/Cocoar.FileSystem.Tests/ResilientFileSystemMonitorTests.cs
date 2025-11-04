@@ -434,14 +434,21 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
 
         // Recreate with modified file (this will be a "created" event since old file was deleted)
         Directory.CreateDirectory(_testRoot);
-        await Task.Delay(200);
         File.WriteAllText(GetTestPath("test.txt"), "v2_modified");
 
+        // Wait for polling to detect directory and switch back to watcher
+        await ActiveWaitHelpers.WaitUntilAsync(
+            () => monitor.IsUsingWatcher,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(100),
+            "switch back to watcher");
+
+        // Wait for reconciliation to detect the file
         await ActiveWaitHelpers.WaitUntilAsync(
             () => createdFiles.Contains("test.txt"),
-            TimeSpan.FromSeconds(8),
-            TimeSpan.FromMilliseconds(200),
-            "detect file recreation via reconciliation");
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromMilliseconds(100),
+            "detect file via reconciliation");
 
         Assert.Contains("test.txt", createdFiles);
     }
