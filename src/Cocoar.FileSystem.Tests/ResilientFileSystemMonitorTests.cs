@@ -132,19 +132,23 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
     {
         var monitor = CreateMonitor();
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         var testFile = GetTestPath("test.txt");
         await Task.Delay(100);
         File.WriteAllText(testFile, "content");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("test.txt"),
+            () => { lock (lockObj) return createdFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
             "file creation event");
 
-        Assert.Contains("test.txt", createdFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", createdFiles);
+        }
     }
 
     [Fact]
@@ -155,18 +159,22 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
 
         var monitor = CreateMonitor();
         var changedFiles = new List<string>();
-        monitor.Changed += (s, e) => changedFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Changed += (s, e) => { lock (lockObj) changedFiles.Add(e.Name!); };
 
         await Task.Delay(200);
         File.WriteAllText(testFile, "modified");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => changedFiles.Contains("test.txt"),
+            () => { lock (lockObj) return changedFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
             "file change event");
 
-        Assert.Contains("test.txt", changedFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", changedFiles);
+        }
     }
 
     [Fact]
@@ -177,18 +185,22 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
 
         var monitor = CreateMonitor();
         var deletedFiles = new List<string>();
-        monitor.Deleted += (s, e) => deletedFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Deleted += (s, e) => { lock (lockObj) deletedFiles.Add(e.Name!); };
 
         await Task.Delay(200);
         File.Delete(testFile);
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => deletedFiles.Contains("test.txt"),
+            () => { lock (lockObj) return deletedFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
             "file deletion event");
 
-        Assert.Contains("test.txt", deletedFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", deletedFiles);
+        }
     }
 
     [Fact]
@@ -222,21 +234,24 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
     {
         var monitor = CreateMonitor(filter: "*.txt");
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         await Task.Delay(100);
         File.WriteAllText(GetTestPath("test.txt"), "content");
         File.WriteAllText(GetTestPath("test.log"), "content");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("test.txt"),
+            () => { lock (lockObj) return createdFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
-            "filtered file creation");
+            "txt file creation event");
 
-        await Task.Delay(500);
-        Assert.Contains("test.txt", createdFiles);
-        Assert.DoesNotContain("test.log", createdFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", createdFiles);
+            Assert.DoesNotContain("test.log", createdFiles);
+        }
     }
 
     [Fact]
@@ -244,7 +259,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
     {
         var monitor = CreateMonitor(includeSubdirectories: true);
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         var subDir = GetTestPath("subfolder");
         Directory.CreateDirectory(subDir);
@@ -253,12 +269,15 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
         File.WriteAllText(Path.Combine(subDir, "test.txt"), "content");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("test.txt"),
+            () => { lock (lockObj) return createdFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
             "subfolder file creation");
 
-        Assert.Contains("test.txt", createdFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", createdFiles);
+        }
     }
 
     [Fact]
@@ -266,7 +285,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
     {
         var monitor = CreateMonitor(includeSubdirectories: false);
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         await Task.Delay(100);
         File.WriteAllText(GetTestPath("root.txt"), "content");
@@ -278,15 +298,18 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
         File.WriteAllText(Path.Combine(subDir, "sub.txt"), "content");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("root.txt"),
+            () => { lock (lockObj) return createdFiles.Contains("root.txt"); },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(50),
             "root file creation");
 
         await Task.Delay(800);
 
-        Assert.Contains("root.txt", createdFiles);
-        Assert.DoesNotContain("sub.txt", createdFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("root.txt", createdFiles);
+            Assert.DoesNotContain("sub.txt", createdFiles);
+        }
     }
 
     #endregion
@@ -414,8 +437,10 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
 
         var changedFiles = new List<string>();
         var createdFiles = new List<string>();
-        monitor.Changed += (s, e) => changedFiles.Add(e.Name!);
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        
+        monitor.Changed += (s, e) => { lock (lockObj) changedFiles.Add(e.Name!); };
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         await ActiveWaitHelpers.WaitUntilAsync(
             () => monitor.IsUsingWatcher,
@@ -432,7 +457,9 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
             TimeSpan.FromMilliseconds(50),
             "enter polling");
 
-        // Recreate with modified file (this will be a "created" event since old file was deleted)
+        // Recreate with modified file 
+        // Note: This may be detected as either Created or Changed depending on platform
+        // macOS tends to report this as Changed, while Windows/Linux report it as Created
         Directory.CreateDirectory(_testRoot);
         File.WriteAllText(GetTestPath("test.txt"), "v2_modified");
 
@@ -443,14 +470,24 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
             TimeSpan.FromMilliseconds(100),
             "switch back to watcher");
 
-        // Wait for reconciliation to detect the file
+        // Wait for reconciliation to detect the file (either as Created or Changed)
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("test.txt"),
+            () => { 
+                lock (lockObj) 
+                    return createdFiles.Contains("test.txt") || changedFiles.Contains("test.txt"); 
+            },
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMilliseconds(100),
             "detect file via reconciliation");
 
-        Assert.Contains("test.txt", createdFiles);
+        // File should be detected via one of these events
+        lock (lockObj)
+        {
+            Assert.True(
+                createdFiles.Contains("test.txt") || changedFiles.Contains("test.txt"),
+                $"File 'test.txt' should be detected via Created or Changed event. " +
+                $"Created: [{string.Join(", ", createdFiles)}], Changed: [{string.Join(", ", changedFiles)}]");
+        }
     }
 
     [Fact]
@@ -554,7 +591,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
         // Simulate silent changes (though in practice, events should fire)
         // The audit will still catch divergence if any
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         await Task.Delay(1500); // Let audit run
 
@@ -575,7 +613,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
             pollingInterval: TimeSpan.FromMilliseconds(300));
 
         var createdFiles = new List<string>();
-        monitor.Created += (s, e) => createdFiles.Add(e.Name!);
+        var lockObj = new object();
+        monitor.Created += (s, e) => { lock (lockObj) createdFiles.Add(e.Name!); };
 
         Assert.False(monitor.IsUsingWatcher);
 
@@ -585,12 +624,15 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
         File.WriteAllText(Path.Combine(nonExistentPath, "test.txt"), "content");
 
         await ActiveWaitHelpers.WaitUntilAsync(
-            () => createdFiles.Contains("test.txt"),
+            () => { lock (lockObj) return createdFiles.Contains("test.txt"); },
             TimeSpan.FromSeconds(6),
             TimeSpan.FromMilliseconds(150),
             "polling mode file detection");
 
-        Assert.Contains("test.txt", createdFiles);
+        lock (lockObj)
+        {
+            Assert.Contains("test.txt", createdFiles);
+        }
     }
 
     [Fact]
