@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Cocoar.FileSystem.Tests/Cocoar.FileSystem.Tests.csproj" />
+  <Project Path="Cocoar.FileSystem/Cocoar.FileSystem.csproj" />
+</Solution>

@@ -1,0 +1,13 @@
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.DotSettings.user
+TestResults/
+BenchmarkDotNet.Artifacts/
+local/
+*.nupkg
+*.snupkg
+.idea/

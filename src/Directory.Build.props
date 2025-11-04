@@ -1,0 +1,72 @@
+<Project>
+
+  <!-- ===== GLOBAL BUILD SETTINGS ===== -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1903;NU1701</WarningsNotAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn> <!-- Missing XML comments -->
+  </PropertyGroup>
+
+  <!-- ===== CI/CD BUILD OPTIMIZATIONS ===== -->
+  <PropertyGroup>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- ===== PACKAGE METADATA ===== -->
+  <PropertyGroup>
+    <Authors>Bernhard Windisch</Authors>
+    <Company>COCOAR e.U.</Company>
+    <Product>Cocoar.FileSystem</Product>
+    <Copyright>Copyright © COCOAR $([System.DateTime]::Now.Year)</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageProjectUrl>https://cocoar.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/cocoar-dev/Cocoar.FileSystem</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>filesystem;file-monitoring;filesystemwatcher;resilient;dotnet;csharp;cross-platform;file-watcher;cocoar</PackageTags>
+    <PackageReleaseNotes>Full release notes: https://github.com/cocoar-dev/Cocoar.FileSystem/blob/develop/CHANGELOG.md</PackageReleaseNotes>
+    <PackageDescription>Production-ready file system utilities for .NET with automatic error recovery and multi-platform support. Includes ResilientFileSystemMonitor with automatic fallback and debouncing.</PackageDescription>
+  </PropertyGroup>
+
+  <!-- ===== SOURCE LINK (for debugging) ===== -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- ===== ANALYZERS ===== -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- ===== PACKAGE REFERENCES (Global) ===== -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="README.md" />
+    <None Include="$(MSBuildThisFileDirectory)..\LICENSE" Pack="true" PackagePath="LICENSE" />
+    <None Include="$(MSBuildThisFileDirectory)..\CHANGELOG.md" Pack="true" PackagePath="CHANGELOG.md" />
+  </ItemGroup>
+
+  <!-- ===== TOOLING PACKAGES (SourceLink) ===== -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- ===== PERFORMANCE OPTIMIZATIONS ===== -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+</Project>
