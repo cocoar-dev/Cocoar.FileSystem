@@ -8,6 +8,7 @@ obj/
 TestResults/
 BenchmarkDotNet.Artifacts/
 local/
+.local/
 *.nupkg
 *.snupkg
 .idea/
