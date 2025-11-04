@@ -1,25 +1,31 @@
 mode: ContinuousDeployment
+
 branches:
-  main:
-    tag: stable
-    increment: Patch
-    is-mainline: true
   develop:
-    tag: alpha
-    increment: Minor
-    is-mainline: false
+    regex: ^develop$
+    label: alpha
+    is-main-branch: true
+
+  release:
+    regex: ^release[/-]
+    label: rc
+
   feature:
-    tag: beta
-    increment: Minor
-    is-mainline: false
+    regex: ^(feature|bugfix)[/-]
+    label: useBranchName
+
   hotfix:
-    tag: hotfix
-    increment: Patch
-    is-mainline: false
+    regex: ^hotfix[/-]
+    label: hotfix
+
   pull-request:
-    tag: pr
-    increment: Patch
-    tag-number-pattern: '[/-](?<number>\d+)'
+    label: pr
+
+  other:
+    regex: .*
+    label: alpha
+
+tag-prefix: 'v'
+commit-message-incrementing: Enabled
 ignore:
   sha: []
-merge-message-formats: {}
