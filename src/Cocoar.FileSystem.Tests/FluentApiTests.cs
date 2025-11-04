@@ -288,20 +288,39 @@ public class FluentApiTests : IDisposable
     }
 
     [Fact]
-    public void SearchBuilder_InCurrentDirectoryOnly_ShouldNotRecurse()
+    public void SearchBuilder_DefaultBehavior_ShouldNotRecurse()
     {
         var subDir = Path.Combine(_testDirectory, "sub");
         Directory.CreateDirectory(subDir);
         File.WriteAllText(Path.Combine(subDir, "deep.txt"), "test");
         File.WriteAllText(Path.Combine(_testDirectory, "root.txt"), "test");
 
+        // Default behavior is MaxDepth(0) - current directory only
         var files = FileSearcher
             .Search(_testDirectory, "*.txt")
-            .InCurrentDirectoryOnly()
             .ToList();
 
         Assert.Single(files);
         Assert.Contains("root.txt", files[0]);
+    }
+
+    [Fact]
+    public void SearchBuilder_Recursively_ShouldRecurseAllSubdirectories()
+    {
+        var subDir = Path.Combine(_testDirectory, "sub");
+        var deepDir = Path.Combine(subDir, "deep");
+        Directory.CreateDirectory(deepDir);
+        
+        File.WriteAllText(Path.Combine(_testDirectory, "root.txt"), "test");
+        File.WriteAllText(Path.Combine(subDir, "sub.txt"), "test");
+        File.WriteAllText(Path.Combine(deepDir, "deep.txt"), "test");
+
+        var files = FileSearcher
+            .Search(_testDirectory, "*.txt")
+            .Recursively()
+            .ToList();
+
+        Assert.Equal(3, files.Count);
     }
 
     [Fact]

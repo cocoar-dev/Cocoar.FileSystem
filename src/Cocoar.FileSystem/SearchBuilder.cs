@@ -10,7 +10,7 @@ public sealed class SearchBuilder : IEnumerable<string>
     private readonly string _searchPath;
     private string _searchPattern = "*";
     private HashSet<string>? _excludedFolders;
-    private int? _maxDepth;
+    private int? _maxDepth = 0;
 
     internal SearchBuilder(string searchPath)
     {
@@ -52,8 +52,8 @@ public sealed class SearchBuilder : IEnumerable<string>
     /// <summary>
     /// Sets the maximum depth to recurse into subdirectories.
     /// </summary>
-    /// <param name="depth">The maximum depth (0 = current directory only, 1 = current + one level, etc.).</param>
-    public SearchBuilder WithMaxDepth(int depth)
+    /// <param name="depth">The maximum depth (0 = current directory only, 1 = current + one level, etc.). Use null for unlimited depth.</param>
+    public SearchBuilder WithMaxDepth(int? depth)
     {
         if (depth < 0)
             throw new ArgumentException("Max depth cannot be negative.", nameof(depth));
@@ -63,12 +63,11 @@ public sealed class SearchBuilder : IEnumerable<string>
     }
 
     /// <summary>
-    /// Limits the search to only the current directory (does not recurse into subdirectories).
-    /// Equivalent to WithMaxDepth(0).
+    /// Recurses through all subdirectories without depth limit.
     /// </summary>
-    public SearchBuilder InCurrentDirectoryOnly()
+    public SearchBuilder Recursively()
     {
-        _maxDepth = 0;
+        _maxDepth = null;
         return this;
     }
 

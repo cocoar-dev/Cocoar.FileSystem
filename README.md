@@ -165,16 +165,27 @@ var firstTen = FileSearcher
     .Take(10)
     .ToList();
 
-// Current directory only (no recursion)
+// Current directory only (no recursion) - this is the DEFAULT behavior!
 var localFiles = FileSearcher
     .Search(@"C:\temp", "*.log")
-    .InCurrentDirectoryOnly()
+    .ToArray();
+
+// Recurse all subdirectories (unlimited depth)
+var allLogs = FileSearcher
+    .Search(@"C:\logs", "*.log")
+    .Recursively()
     .ToArray();
 
 // Check if any files exist
 bool hasConfig = FileSearcher
     .Search(@"C:\config", "*.json")
     .Any();
+
+// Limit recursion depth (e.g., only 3 levels deep)
+var limitedFiles = FileSearcher
+    .Search(@"C:\deep", "*.txt")
+    .WithMaxDepth(3)
+    .ToList();
 ```
 
 ### Direct API (Alternative)
