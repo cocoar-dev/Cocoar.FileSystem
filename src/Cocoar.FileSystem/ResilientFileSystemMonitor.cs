@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using System.Threading.Channels;
 
 namespace Cocoar.FileSystem;
 
@@ -25,6 +26,10 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     private FileSystemWatcher? _watcher;
     private MonitorState _state = MonitorState.Stopped;
     private bool _disposed;
+    
+    // Event serialization channel
+    private readonly Channel<EventEntry> _eventChannel;
+    private readonly Task _eventDeliveryTask;
 
     /// <summary>
     /// Monitor state.
@@ -45,6 +50,27 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         DateTime LastWriteUtc,
         FileAttributes Attributes
     );
+    
+    /// <summary>
+    /// Queued event entry for serialized delivery.
+    /// </summary>
+    private sealed record EventEntry(
+        EventType Type,
+        FileSystemEventArgs Args,
+        RenamedEventArgs? RenamedArgs = null,
+        ErrorEventArgs? ErrorArgs = null,
+        ModeChangedEventArgs? ModeArgs = null
+    );
+    
+    private enum EventType
+    {
+        Created,
+        Changed,
+        Deleted,
+        Renamed,
+        Error,
+        ModeChanged
+    }
 
     /// <summary>
     /// Configuration options for the resilient file system monitor.
@@ -158,6 +184,16 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     public event EventHandler<RenamedEventArgs>? Renamed;
 
     /// <summary>
+    /// Gets a channel reader that delivers all file system events in order.
+    /// This is useful for reactive programming scenarios where you want to process
+    /// events as a stream without subscribing to individual event handlers.
+    /// Events are delivered in the same order they occurred.
+    /// </summary>
+    public ChannelReader<FileSystemEvent> Events => _publicEventChannel.Reader;
+    
+    private readonly Channel<FileSystemEvent> _publicEventChannel;
+
+    /// <summary>
     /// Gets whether the monitor is currently using the native FileSystemWatcher (true) or polling mode (false).
     /// </summary>
     public bool IsUsingWatcher
@@ -191,6 +227,23 @@ public sealed class ResilientFileSystemMonitor : IDisposable
 
         _options = options;
         _rootPath = Path.GetFullPath(options.Path);
+        
+        // Create event serialization channel (internal)
+        _eventChannel = Channel.CreateUnbounded<EventEntry>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
+        
+        // Create public event channel (for ChannelReader<FileSystemEvent> API)
+        _publicEventChannel = Channel.CreateUnbounded<FileSystemEvent>(new UnboundedChannelOptions
+        {
+            SingleReader = false,
+            SingleWriter = true
+        });
+        
+        // Start event delivery task
+        _eventDeliveryTask = Task.Run(DeliverEventsAsync);
         
         // Create timers (but don't start them yet)
         _healthTimer = new Timer(OnHealthTick, null, Timeout.Infinite, Timeout.Infinite);
@@ -252,7 +305,7 @@ public sealed class ResilientFileSystemMonitor : IDisposable
             _state = MonitorState.Watching;
             StopPollingTimer();
             
-            ModeChanged?.Invoke(this, new ModeChangedEventArgs(WatcherMode.Native, "watcher started"));
+            EnqueueEvent(new EventEntry(EventType.ModeChanged, null!, ModeArgs: new ModeChangedEventArgs(WatcherMode.Native, "watcher started")));
         }
         catch (Exception ex)
         {
@@ -293,7 +346,7 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         
         _pollingTimer.Change(_options.PollingInterval, _options.PollingInterval);
         
-        ModeChanged?.Invoke(this, new ModeChangedEventArgs(WatcherMode.Polling, reason));
+        EnqueueEvent(new EventEntry(EventType.ModeChanged, null!, ModeArgs: new ModeChangedEventArgs(WatcherMode.Polling, reason)));
     }
 
     private void StopPollingTimer()
@@ -323,12 +376,12 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         }
         
         if (ShouldEmitEvent(e.FullPath))
-            Renamed?.Invoke(this, e);
+            EnqueueEvent(new EventEntry(EventType.Renamed, e, RenamedArgs: e));
     }
 
     private void OnFileSystemWatcherError(object sender, ErrorEventArgs e)
     {
-        Error?.Invoke(this, e);
+        EnqueueEvent(new EventEntry(EventType.Error, null!, ErrorArgs: e));
 
         if (_options.AutoRecoverFromErrors && _options.EnablePollingFallback)
         {
@@ -356,18 +409,15 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         {
             var args = new FileSystemEventArgs(changeType, Path.GetDirectoryName(fullPath)!, Path.GetFileName(fullPath));
             
-            switch (changeType)
+            var eventType = changeType switch
             {
-                case WatcherChangeTypes.Created:
-                    Created?.Invoke(this, args);
-                    break;
-                case WatcherChangeTypes.Changed:
-                    Changed?.Invoke(this, args);
-                    break;
-                case WatcherChangeTypes.Deleted:
-                    Deleted?.Invoke(this, args);
-                    break;
-            }
+                WatcherChangeTypes.Created => EventType.Created,
+                WatcherChangeTypes.Changed => EventType.Changed,
+                WatcherChangeTypes.Deleted => EventType.Deleted,
+                _ => throw new ArgumentOutOfRangeException(nameof(changeType))
+            };
+            
+            EnqueueEvent(new EventEntry(eventType, args));
         }
     }
 
@@ -475,7 +525,7 @@ public sealed class ResilientFileSystemMonitor : IDisposable
                 catch (Exception ex)
                 {
                     // Continue polling
-                    Error?.Invoke(this, new ErrorEventArgs(ex));
+                    EnqueueEvent(new EventEntry(EventType.Error, null!, ErrorArgs: new ErrorEventArgs(ex)));
                 }
             }
         }
@@ -490,27 +540,27 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         // Must be called under lock
         var oldIndex = _index;
 
-        // Detect created/changed files
-        foreach (var (relPath, meta) in currentSnapshot)
-        {
-            if (!oldIndex.TryGetValue(relPath, out var oldMeta))
-            {
-                // Created
-                EmitSyntheticEvent(relPath, WatcherChangeTypes.Created);
-            }
-            else if (HasChanged(oldMeta, meta, relPath))
-            {
-                // Changed
-                EmitSyntheticEvent(relPath, WatcherChangeTypes.Changed);
-            }
-        }
-
-        // Detect deleted files
+        // Detect deleted files FIRST (so we don't confuse with creates)
         foreach (var relPath in oldIndex.Keys)
         {
             if (!currentSnapshot.ContainsKey(relPath))
             {
                 EmitSyntheticEvent(relPath, WatcherChangeTypes.Deleted);
+            }
+        }
+
+        // Detect created/changed files
+        foreach (var (relPath, meta) in currentSnapshot)
+        {
+            if (!oldIndex.TryGetValue(relPath, out var oldMeta))
+            {
+                // Created (new file that wasn't in old index)
+                EmitSyntheticEvent(relPath, WatcherChangeTypes.Created);
+            }
+            else if (HasChanged(oldMeta, meta, relPath))
+            {
+                // Changed (file existed before and now has different metadata)
+                EmitSyntheticEvent(relPath, WatcherChangeTypes.Changed);
             }
         }
 
@@ -590,18 +640,15 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         var name = Path.GetFileName(fullPath);
         var args = new FileSystemEventArgs(changeType, dir, name);
 
-        switch (changeType)
+        var eventType = changeType switch
         {
-            case WatcherChangeTypes.Created:
-                Created?.Invoke(this, args);
-                break;
-            case WatcherChangeTypes.Changed:
-                Changed?.Invoke(this, args);
-                break;
-            case WatcherChangeTypes.Deleted:
-                Deleted?.Invoke(this, args);
-                break;
-        }
+            WatcherChangeTypes.Created => EventType.Created,
+            WatcherChangeTypes.Changed => EventType.Changed,
+            WatcherChangeTypes.Deleted => EventType.Deleted,
+            _ => throw new ArgumentOutOfRangeException(nameof(changeType))
+        };
+
+        EnqueueEvent(new EventEntry(eventType, args));
     }
 
     #endregion
@@ -721,6 +768,68 @@ public sealed class ResilientFileSystemMonitor : IDisposable
 
     #endregion
 
+    #region Event Delivery
+    
+    private void EnqueueEvent(EventEntry entry)
+    {
+        _eventChannel.Writer.TryWrite(entry);
+    }
+    
+    private async Task DeliverEventsAsync()
+    {
+        await foreach (var entry in _eventChannel.Reader.ReadAllAsync())
+        {
+            try
+            {
+                // Create unified event for public channel
+                var unifiedEvent = entry.Type switch
+                {
+                    EventType.Created => FileSystemEvent.Create(entry.Args),
+                    EventType.Changed => FileSystemEvent.Change(entry.Args),
+                    EventType.Deleted => FileSystemEvent.Delete(entry.Args),
+                    EventType.Renamed => FileSystemEvent.Rename(entry.RenamedArgs!),
+                    EventType.Error => FileSystemEvent.Error(entry.ErrorArgs!),
+                    EventType.ModeChanged => FileSystemEvent.ModeChange(entry.ModeArgs!),
+                    _ => null
+                };
+                
+                if (unifiedEvent != null)
+                {
+                    _publicEventChannel.Writer.TryWrite(unifiedEvent);
+                }
+                
+                // Fire traditional events
+                switch (entry.Type)
+                {
+                    case EventType.Created:
+                        Created?.Invoke(this, entry.Args);
+                        break;
+                    case EventType.Changed:
+                        Changed?.Invoke(this, entry.Args);
+                        break;
+                    case EventType.Deleted:
+                        Deleted?.Invoke(this, entry.Args);
+                        break;
+                    case EventType.Renamed:
+                        Renamed?.Invoke(this, entry.RenamedArgs!);
+                        break;
+                    case EventType.Error:
+                        Error?.Invoke(this, entry.ErrorArgs!);
+                        break;
+                    case EventType.ModeChanged:
+                        ModeChanged?.Invoke(this, entry.ModeArgs!);
+                        break;
+                }
+            }
+            catch
+            {
+                // Swallow exceptions from user event handlers
+            }
+        }
+    }
+
+    #endregion
+
     #region IDisposable
 
     public void Dispose()
@@ -738,6 +847,20 @@ public sealed class ResilientFileSystemMonitor : IDisposable
             _healthTimer.Dispose();
             _auditTimer.Dispose();
             _pollingTimer.Dispose();
+            
+            // Complete the event channels and wait for delivery to finish
+            _eventChannel.Writer.Complete();
+            _publicEventChannel.Writer.Complete();
+        }
+        
+        // Wait for event delivery outside the lock
+        try
+        {
+            _eventDeliveryTask.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch
+        {
+            // Best effort - don't throw from Dispose
         }
     }
 

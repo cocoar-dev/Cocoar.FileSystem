@@ -12,6 +12,7 @@
 - **🔄 Auto-Recovery** - Handles directory disappearing/reappearing, permission errors, watcher crashes
 - **⚡ Efficient & Reliable** - Automatic switching between FileSystemWatcher (efficient) and polling (resilient)
 - **🎯 Debouncing** - Built-in debouncing to reduce noise from rapid file changes
+- **🚀 High-Performance File Search** - Fast directory traversal with lazy evaluation
 - **🌍 Cross-Platform** - Tested on Windows, Linux, and macOS
 - **📦 Zero Dependencies** - Lightweight with no external dependencies
 
@@ -64,6 +65,96 @@ monitor.Changed += (sender, e) =>
     // This will only fire once even if file is saved multiple times rapidly
     ProcessFile(e.FullPath);
 };
+```
+
+### Reactive Stream (ChannelReader)
+
+For reactive scenarios, you can consume all events as a unified ordered stream:
+
+```csharp
+var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
+{
+    Path = @"C:\data"
+});
+
+// Consume events from the channel - all events in order!
+await foreach (var evt in monitor.Events.ReadAllAsync(cancellationToken))
+{
+    switch (evt.Kind)
+    {
+        case FileSystemEventKind.Created:
+            Console.WriteLine($"Created: {evt.FullPath}");
+            break;
+        case FileSystemEventKind.Changed:
+            Console.WriteLine($"Changed: {evt.FullPath}");
+            break;
+        case FileSystemEventKind.Deleted:
+            Console.WriteLine($"Deleted: {evt.FullPath}");
+            break;
+        case FileSystemEventKind.Renamed:
+            Console.WriteLine($"Renamed: {evt.OldFullPath} → {evt.FullPath}");
+            break;
+        case FileSystemEventKind.Error:
+            Console.WriteLine($"Error: {evt.Exception?.Message}");
+            break;
+        case FileSystemEventKind.ModeChanged:
+            Console.WriteLine($"Mode changed to {evt.Mode}: {evt.Reason}");
+            break;
+    }
+}
+```
+
+Benefits:
+- ✅ All events (Created, Changed, Deleted, Renamed, Error, ModeChanged) in **one ordered stream**
+- ✅ No race conditions - events are guaranteed to be delivered in order
+- ✅ Works perfectly with LINQ, Rx.NET, or async iteration
+- ✅ No need for `System.Reactive` dependency
+
+```csharp
+// Example: Throttle with LINQ
+await foreach (var evt in monitor.Events.ReadAllAsync()
+    .Where(e => e.Kind == FileSystemEventKind.Changed)
+    .ToAsyncEnumerable())
+{
+    // Process only change events
+}
+```
+
+
+### High-Performance File Search
+
+```csharp
+using Cocoar.FileSystem;
+
+// Simple search - all text files
+var files = FileSearcher.EnumerateFiles(
+    new DirectoryInfo(@"C:\projects"),
+    "*.txt");
+
+foreach (var file in files)
+{
+    Console.WriteLine(file);
+}
+
+// With depth limit and excluded folders
+var codeFiles = FileSearcher.EnumerateFiles(
+    new DirectoryInfo(@"C:\repos\myproject"),
+    "*.cs",
+    excludedFolders: new HashSet<string> { "bin", "obj", "node_modules", ".git" },
+    maxDepth: 5);
+
+foreach (var file in codeFiles)
+{
+    ProcessCodeFile(file);
+}
+
+// Lazy evaluation - efficient for large directory trees
+var largeSearch = FileSearcher.EnumerateFiles(
+    new DirectoryInfo(@"C:\large-directory"),
+    "*");
+
+// Only enumerates first 10 files
+var firstTen = largeSearch.Take(10).ToList();
 ```
 
 ### Monitor Mode Changes (Observability)
@@ -126,7 +217,10 @@ else if (monitor.IsPolling)
 
 ## 🧵 Thread Safety
 
-All operations are thread-safe. Events are raised on background threads.
+All operations are thread-safe. Events are raised sequentially on a background thread, guaranteeing:
+- ✅ Events are delivered in the order they occurred
+- ✅ No concurrent event handler invocations (unless you subscribe multiple handlers)
+- ✅ When using the `Events` channel, you have full control over concurrency
 
 ## 🗑️ Disposal
 
