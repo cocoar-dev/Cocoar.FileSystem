@@ -7,10 +7,9 @@ This document shows how to use the `Events` channel with reactive patterns.
 The `Events` property exposes a `ChannelReader<FileSystemEvent>` which can be consumed directly:
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data"
-});
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
 
 await foreach (var evt in monitor.Events.ReadAllAsync())
 {
@@ -21,10 +20,9 @@ await foreach (var evt in monitor.Events.ReadAllAsync())
 ## Manual Throttling with LINQ
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data"
-});
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
 
 var lastProcessed = new Dictionary<string, DateTime>();
 var throttleWindow = TimeSpan.FromMilliseconds(500);
@@ -83,10 +81,9 @@ public static class ChannelExtensions
 ### Example: Throttle Changes
 
 ```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\data"
-});
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
 
 var subscription = monitor.Events
     .AsObservable()
@@ -133,13 +130,16 @@ var subscription = monitor.Events
 
 ## Why Use the Events Channel?
 
-### Traditional approach (separate events):
+### Traditional approach (separate event handlers):
 ```csharp
-monitor.Created += (s, e) => HandleEvent("Created", e.FullPath);
-monitor.Changed += (s, e) => HandleEvent("Changed", e.FullPath);
-monitor.Deleted += (s, e) => HandleEvent("Deleted", e.FullPath);
-monitor.Renamed += (s, e) => HandleEvent("Renamed", e.FullPath);
-monitor.Error += (s, e) => HandleEvent("Error", "");
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .OnCreated((s, e) => HandleEvent("Created", e.FullPath))
+    .OnChanged((s, e) => HandleEvent("Changed", e.FullPath))
+    .OnDeleted((s, e) => HandleEvent("Deleted", e.FullPath))
+    .OnRenamed((s, e) => HandleEvent("Renamed", e.FullPath))
+    .OnError((s, e) => HandleEvent("Error", ""))
+    .Build();
 ```
 
 **Problems:**
@@ -150,6 +150,10 @@ monitor.Error += (s, e) => HandleEvent("Error", "");
 
 ### New approach (unified stream):
 ```csharp
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\data")
+    .Build();
+
 await foreach (var evt in monitor.Events.ReadAllAsync())
 {
     switch (evt.Kind)

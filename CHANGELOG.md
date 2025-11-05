@@ -5,13 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2025-11-05
 
 ### Added
-- Initial release of Cocoar.FileSystem
-- `ResilientFileSystemMonitor` - Production-ready FileSystemWatcher with automatic fallback and error recovery
-- Automatic switching between FileSystemWatcher (efficient) and polling (resilient)
-- Built-in debouncing support for reducing noise from rapid file changes
-- Multi-platform support (Windows, Linux, macOS)
+- Initial stable release of Cocoar.FileSystem
+- **ResilientFileSystemMonitor** - Production-ready FileSystemWatcher with automatic fallback and error recovery
+  - Automatic switching between FileSystemWatcher (efficient) and polling (resilient)
+  - Built-in debouncing support for reducing noise from rapid file changes
+  - Periodic health checks to detect silent watcher failures (especially on macOS)
+  - Directory identity tracking to detect delete+recreate scenarios
+  - Fluent API for clean, discoverable configuration
+  - Reactive event stream via `ChannelReader<FileSystemEvent>` for ordered event processing
+  - Full support for all event types: Created, Changed, Deleted, Renamed, Error, ModeChanged
+  - Multi-platform support (Windows, Linux, macOS)
+- **FileSearcher** - High-performance file search utility
+  - Fast, lazy-evaluated directory traversal
+  - Fluent API for search configuration
+  - Support for depth limits, exclusion patterns, and custom filters
+  - Efficient handling of large directory trees
+- **FileReader** - Secure file reading with shared access
+  - Read files as byte arrays with `FileShare.ReadWrite` support
+  - Works even when other processes have files open
+  - Optional UTF-8 BOM stripping for text files
+  - Try-pattern support (`TryReadAllBytes`) for graceful handling of missing files
+  - Byte arrays can be zeroed out after use for sensitive content
+- Comprehensive test suite with 98 tests across all major platforms
+- Complete documentation and usage examples
+- GitHub Actions CI/CD pipelines for all major platforms
 
-[Unreleased]: https://github.com/cocoar-dev/Cocoar.FileSystem/compare/v0.1.0...HEAD
+[1.0.0]: https://github.com/cocoar-dev/Cocoar.FileSystem/releases/tag/v1.0.0

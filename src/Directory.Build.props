@@ -33,7 +33,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>filesystem;file-monitoring;filesystemwatcher;resilient;dotnet;csharp;cross-platform;file-watcher;cocoar</PackageTags>
     <PackageReleaseNotes>Full release notes: https://github.com/cocoar-dev/Cocoar.FileSystem/blob/develop/CHANGELOG.md</PackageReleaseNotes>
-    <PackageDescription>Production-ready file system utilities for .NET with automatic error recovery and multi-platform support. Includes ResilientFileSystemMonitor with automatic fallback and debouncing.</PackageDescription>
+    <Description>Production-ready file system utilities for .NET with automatic error recovery and multi-platform support.</Description>
   </PropertyGroup>
 
   <!-- ===== SOURCE LINK (for debugging) ===== -->

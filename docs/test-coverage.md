@@ -3,9 +3,11 @@
 ## Overview
 The Cocoar.FileSystem library has comprehensive test coverage across all major components and platforms (Windows, Linux, macOS).
 
-**Total Tests: 48**
+**Total Tests: 98**
 - ResilientFileSystemMonitor: 28 tests
 - FileSearcher: 20 tests
+- FileReader: 18 tests
+- FluentApi: 32 tests
 
 ---
 
@@ -117,6 +119,73 @@ Indirectly tested through:
 Platform-specific identity (Windows: FileId, Unix: inode) is verified through cross-platform CI.
 
 ### 2. **Lossless Event Delivery**
+- Reconciliation after directory recreation
+- Events delivered in order via Channel
+- No dropped events during mode transitions
+
+### 3. **Cross-Platform Resilience**
+- macOS directory replacement detection
+- Health check on all platforms
+- Polling fallback consistency
+
+### 4. **Performance**
+- Lazy file enumeration
+- Efficient directory traversal
+- Minimal overhead for health checks
+
+---
+
+## FileReader Tests (18)
+
+### Basic Reading (3 tests)
+- `ReadAllBytes_WithValidFile_ShouldReturnContent` - Tests basic file reading
+- `ReadAllBytes_WithEmptyFile_ShouldReturnEmptyArray` - Tests empty file handling
+- `ReadAllBytes_WithLargeFile_ShouldReadCompletely` - Tests 1 MB file reading
+
+### UTF-8 BOM Handling (6 tests)
+- `ReadAllBytes_WithUtf8Bom_AndStripEnabled_ShouldRemoveBom` - Tests BOM removal
+- `ReadAllBytes_WithUtf8Bom_AndStripDisabled_ShouldKeepBom` - Tests BOM preservation
+- `ReadAllBytes_WithoutBom_AndStripEnabled_ShouldReturnAsIs` - Tests file without BOM
+- `ReadAllBytes_WithPartialBom_ShouldNotStrip` - Tests incomplete BOM (only 2 bytes)
+- `ReadAllBytes_WithOnlyBom_AndStripEnabled_ShouldReturnEmpty` - Tests file with only BOM
+- `TryReadAllBytes_WithUtf8Bom_AndStripEnabled_ShouldRemoveBom` - Tests BOM removal in Try variant
+
+### Shared Access (1 test)
+- `ReadAllBytes_WithSharedAccess_ShouldAllowReading` - Tests FileShare.ReadWrite behavior
+
+### Validation (4 tests)
+- `ReadAllBytes_WithNullPath_ShouldThrow` - Tests ArgumentNullException
+- `ReadAllBytes_WithEmptyPath_ShouldThrow` - Tests ArgumentException
+- `ReadAllBytes_WithWhitespacePath_ShouldThrow` - Tests ArgumentException
+- `ReadAllBytes_WithNonExistentFile_ShouldThrow` - Tests FileNotFoundException
+
+### Try Pattern (4 tests)
+- `TryReadAllBytes_WithValidFile_ShouldReturnContent` - Tests successful read
+- `TryReadAllBytes_WithNonExistentFile_ShouldReturnNull` - Tests null return for missing file
+- `TryReadAllBytes_WithNullPath_ShouldThrow` - Tests validation
+- `TryReadAllBytes_WithEmptyPath_ShouldThrow` - Tests validation
+- `TryReadAllBytes_WithWhitespacePath_ShouldThrow` - Tests validation
+
+---
+
+## Platform Coverage
+
+All tests run on:
+- ✅ **Windows** (latest)
+- ✅ **Linux** (ubuntu-latest)
+- ✅ **macOS** (latest)
+
+---
+
+## Key Features Tested
+
+### 1. **Directory Identity Tracking** (FileSystemIdentity)
+Indirectly tested through:
+- Directory delete/recreate scenarios
+- Health check transitions
+- Automatic recovery tests
+
+Platform-specific identity (Windows: FileId, Unix: inode) is verified through cross-platform CI.
 - Reconciliation after directory recreation
 - Event ordering via Channel serialization
 - No missed events during rapid file creation

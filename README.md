@@ -13,6 +13,7 @@
 - **⚡ Efficient & Reliable** - Automatic switching between FileSystemWatcher (efficient) and polling (resilient)
 - **🎯 Debouncing** - Built-in debouncing to reduce noise from rapid file changes
 - **🚀 High-Performance File Search** - Fast directory traversal with lazy evaluation
+- **🔐 Secure File Reading** - Read files as bytes with shared access support (prevent immutable strings in memory)
 - **🌍 Cross-Platform** - Tested on Windows, Linux, and macOS
 - **📦 Zero Dependencies** - Lightweight with no external dependencies
 
@@ -24,218 +25,76 @@ dotnet add package Cocoar.FileSystem
 
 ## 📖 Quick Start
 
-### Basic File Monitoring (Fluent API)
+### Resilient File System Monitoring
+
+Monitor directories with automatic error recovery and fallback:
 
 ```csharp
 using Cocoar.FileSystem;
 
-// Simple, clean fluent API
 var monitor = ResilientFileSystemMonitor
     .Watch(@"C:\configs", "*.json")
-    .OnChanged((sender, e) => 
-    {
-        Console.WriteLine($"File changed: {e.Name}");
-        ReloadConfiguration(e.FullPath);
-    })
-    .OnCreated((sender, e) => 
-    {
-        Console.WriteLine($"File created: {e.Name}");
-    })
-    .OnRenamed((sender, e) => 
-    {
-        Console.WriteLine($"File renamed: {e.OldName} → {e.Name}");
-    })
+    .WithDebounce(500) // Optional: reduce noise from rapid changes
+    .OnChanged((sender, e) => Console.WriteLine($"Changed: {e.Name}"))
+    .OnCreated((sender, e) => Console.WriteLine($"Created: {e.Name}"))
     .Build();
 ```
 
-### With Debouncing
+**Key Features:** Auto-recovery, debouncing, reactive streams, health checks  
+📖 **[Full Guide](docs/resilient-file-system-monitor.md)** | **[Reactive Examples](docs/reactive-examples.md)**
 
-```csharp
-var monitor = ResilientFileSystemMonitor
-    .Watch(@"C:\data", "*.txt")
-    .WithDebounce(500) // milliseconds - only fire once per file per 500ms
-    .OnChanged((sender, e) => 
-    {
-        // This will only fire once even if file is saved multiple times rapidly
-        ProcessFile(e.FullPath);
-    })
-    .Build();
-```
+---
 
-### Options Pattern (Alternative)
+### High-Performance File Search
 
-You can still use the options pattern for configuration or serialization scenarios:
-
-```csharp
-var monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-{
-    Path = @"C:\configs",
-    Filter = "*.json",
-    EnablePollingFallback = true,
-    PollingInterval = TimeSpan.FromSeconds(5),
-    DebounceTime = TimeSpan.FromMilliseconds(500)
-});
-
-monitor.Changed += (sender, e) => ReloadConfiguration(e.FullPath);
-```
-
-### Reactive Stream (ChannelReader)
-
-For reactive scenarios, you can consume all events as a unified ordered stream:
-
-```csharp
-var monitor = ResilientFileSystemMonitor
-    .Watch(@"C:\data")
-    .Build();
-
-// Consume events from the channel - all events in order!
-await foreach (var evt in monitor.Events.ReadAllAsync(cancellationToken))
-{
-    switch (evt.Kind)
-    {
-        case FileSystemEventKind.Created:
-            Console.WriteLine($"Created: {evt.FullPath}");
-            break;
-        case FileSystemEventKind.Changed:
-            Console.WriteLine($"Changed: {evt.FullPath}");
-            break;
-        case FileSystemEventKind.Deleted:
-            Console.WriteLine($"Deleted: {evt.FullPath}");
-            break;
-        case FileSystemEventKind.Renamed:
-            Console.WriteLine($"Renamed: {evt.OldFullPath} → {evt.FullPath}");
-            break;
-        case FileSystemEventKind.Error:
-            Console.WriteLine($"Error: {evt.Exception?.Message}");
-            break;
-        case FileSystemEventKind.ModeChanged:
-            Console.WriteLine($"Mode changed to {evt.Mode}: {evt.Reason}");
-            break;
-    }
-}
-```
-
-Benefits:
-- ✅ All events (Created, Changed, Deleted, Renamed, Error, ModeChanged) in **one ordered stream**
-- ✅ No race conditions - events are guaranteed to be delivered in order
-- ✅ Works perfectly with LINQ, Rx.NET, or async iteration
-- ✅ No need for `System.Reactive` dependency
-
-```csharp
-// Example: Throttle with LINQ
-await foreach (var evt in monitor.Events.ReadAllAsync()
-    .Where(e => e.Kind == FileSystemEventKind.Changed)
-    .ToAsyncEnumerable())
-{
-    // Process only change events
-}
-```
-
-
-### High-Performance File Search (Fluent API)
+Fast, lazy-evaluated directory traversal:
 
 ```csharp
 using Cocoar.FileSystem;
 
-// Simple search - all text files
-var files = FileSearcher
-    .Search(@"C:\projects", "*.txt")
-    .ToList();
-
-foreach (var file in files)
-{
-    Console.WriteLine(file);
-}
-
-// With depth limit and excluded folders
 var codeFiles = FileSearcher
     .Search(@"C:\repos\myproject", "*.cs")
-    .Excluding("bin", "obj", "node_modules", ".git")
+    .Excluding("bin", "obj", "node_modules")
     .WithMaxDepth(5)
     .ToList();
-
-foreach (var file in codeFiles)
-{
-    ProcessCodeFile(file);
-}
-
-// Lazy evaluation - efficient for large directory trees
-var firstTen = FileSearcher
-    .InDirectory(@"C:\large-directory")
-    .Take(10)
-    .ToList();
-
-// Current directory only (no recursion) - this is the DEFAULT behavior!
-var localFiles = FileSearcher
-    .Search(@"C:\temp", "*.log")
-    .ToArray();
-
-// Recurse all subdirectories (unlimited depth)
-var allLogs = FileSearcher
-    .Search(@"C:\logs", "*.log")
-    .Recursively()
-    .ToArray();
-
-// Check if any files exist
-bool hasConfig = FileSearcher
-    .Search(@"C:\config", "*.json")
-    .Any();
-
-// Limit recursion depth (e.g., only 3 levels deep)
-var limitedFiles = FileSearcher
-    .Search(@"C:\deep", "*.txt")
-    .WithMaxDepth(3)
-    .ToList();
 ```
 
-### Direct API (Alternative)
+**Key Features:** Lazy evaluation, depth limits, exclusion patterns, LINQ support  
+📖 **[Examples](docs/examples.md#high-performance-file-search)**
 
-You can also use the direct API for more control:
+---
+
+### Secure File Reading
+
+Read files with shared access and security features:
 
 ```csharp
-// Simple search - all text files
-var files = FileSearcher.EnumerateFiles(
-    new DirectoryInfo(@"C:\projects"),
-    "*.txt");
+using Cocoar.FileSystem;
 
-// With depth limit and excluded folders
-var codeFiles = FileSearcher.EnumerateFiles(
-    new DirectoryInfo(@"C:\repos\myproject"),
-    "*.cs",
-    excludedFolders: new HashSet<string> { "bin", "obj", "node_modules", ".git" },
-    maxDepth: 5);
-```
-
-### Monitor Mode Changes (Observability)
-
-```csharp
-var monitor = ResilientFileSystemMonitor
-    .Watch(@"C:\data")
-    .OnModeChanged((sender, e) => 
-    {
-        Console.WriteLine($"Monitor switched to {e.NewMode}: {e.Reason}");
-    })
-    .OnError((sender, e) => 
-    {
-        Console.WriteLine($"Monitor error: {e.GetException().Message}");
-    })
-    .Build();
-
-// Check current state
-if (monitor.IsUsingWatcher)
+byte[] content = FileReader.ReadAllBytes(@"C:\config.dat");
+try 
 {
-    Console.WriteLine("Using efficient FileSystemWatcher");
+    ProcessSensitiveData(content);
 }
-else
+finally
 {
-    Console.WriteLine("Using polling fallback");
+    Array.Clear(content, 0, content.Length); // Zero out when done
 }
 ```
+
+**Key Features:** Shared read/write access, BOM stripping, try-pattern, byte array zeroing  
+📖 **[Full Guide](docs/file-reader.md)**
+
+---
 
 ## 📚 Documentation
 
 - **[ResilientFileSystemMonitor Guide](docs/resilient-file-system-monitor.md)** - Detailed usage guide
+- **[FileReader Guide](docs/file-reader.md)** - Secure file reading with shared access
 - **[Examples](docs/examples.md)** - More usage examples
+- **[Reactive Examples](docs/reactive-examples.md)** - Advanced reactive patterns with Rx.NET
+- **[Event Ordering Guarantees](docs/event-ordering-guarantee.md)** - Thread-safety and event ordering
+- **[Test Coverage](docs/test-coverage.md)** - Comprehensive test documentation
 
 ## 🔑 Key Benefits Over Raw FileSystemWatcher
 
@@ -283,7 +142,6 @@ using var monitor = ResilientFileSystemMonitor
 
 - SemVer (additive MINOR, breaking MAJOR)
 - PRs & issues welcome
-- Licensed under Apache License 2.0 (explicit patent grant & attribution via NOTICE)
 
 ## 📄 License & Trademark
 

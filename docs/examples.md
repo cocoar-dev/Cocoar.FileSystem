@@ -307,3 +307,169 @@ public class FileMonitorTests
     }
 }
 ```
+
+## Secure File Reading
+
+### Reading Sensitive Configuration Files
+
+Read sensitive data as bytes to avoid immutable strings in memory:
+
+```csharp
+using Cocoar.FileSystem;
+using System.Security.Cryptography;
+using System.Text;
+
+public class SecureConfigReader
+{
+    public SecretConfig ReadSecrets(string path)
+    {
+        byte[]? configBytes = null;
+        try
+        {
+            // Read with shared access - works even if file is locked by another process
+            configBytes = FileReader.ReadAllBytes(path);
+            
+            // Decrypt or parse the sensitive content
+            var config = ParseSecretConfig(configBytes);
+            
+            return config;
+        }
+        finally
+        {
+            // CRITICAL: Zero out the byte array to remove from memory
+            if (configBytes != null)
+            {
+                Array.Clear(configBytes, 0, configBytes.Length);
+            }
+        }
+    }
+    
+    private SecretConfig ParseSecretConfig(byte[] data)
+    {
+        // Parse your config here
+        var json = Encoding.UTF8.GetString(data);
+        return JsonSerializer.Deserialize<SecretConfig>(json)!;
+    }
+}
+```
+
+### Handling UTF-8 BOM
+
+Strip UTF-8 BOM automatically when reading text files:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class TextFileReader
+{
+    public string ReadTextFile(string path)
+    {
+        // Strip BOM if present - file saved with BOM will be read correctly
+        byte[] bytes = FileReader.ReadAllBytes(path, stripUtf8Bom: true);
+        
+        // Now decode as UTF-8 without BOM
+        return Encoding.UTF8.GetString(bytes);
+    }
+}
+```
+
+### Try-Read Pattern for Optional Files
+
+Handle optional configuration files gracefully:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class ConfigurationManager
+{
+    public void LoadConfiguration()
+    {
+        // Try to load optional override file
+        byte[]? overrideConfig = FileReader.TryReadAllBytes(@"C:\config\override.json");
+        
+        if (overrideConfig != null)
+        {
+            Console.WriteLine("Override configuration found, applying...");
+            ApplyOverrides(overrideConfig);
+        }
+        else
+        {
+            Console.WriteLine("No override configuration, using defaults");
+        }
+        
+        // Main config is required
+        byte[] mainConfig = FileReader.ReadAllBytes(@"C:\config\main.json");
+        ApplyMainConfig(mainConfig);
+    }
+    
+    private void ApplyOverrides(byte[] config) { /* ... */ }
+    private void ApplyMainConfig(byte[] config) { /* ... */ }
+}
+```
+
+### Reading Binary Files with Shared Access
+
+Read binary files that may be written by other processes:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class LogProcessor
+{
+    public void ProcessActiveLogFile(string logPath)
+    {
+        // FileReader uses FileShare.ReadWrite, allowing read even when
+        // the logging process has the file open for writing
+        byte[] logData = FileReader.ReadAllBytes(logPath);
+        
+        ProcessLogEntries(logData);
+    }
+
+    private void ProcessLogEntries(byte[] data)
+    {
+        // Process the binary log entries
+        Console.WriteLine($"Processing {data.Length} bytes of log data");
+    }
+}
+```
+
+### Secure Password File Reading
+
+Example of reading credentials with proper cleanup:
+
+```csharp
+using Cocoar.FileSystem;
+using System.Security;
+
+public class CredentialReader
+{
+    public SecureString ReadPassword(string passwordFilePath)
+    {
+        byte[]? passwordBytes = null;
+        try
+        {
+            passwordBytes = FileReader.ReadAllBytes(passwordFilePath, stripUtf8Bom: true);
+
+            // Convert to SecureString character by character
+            var securePassword = new SecureString();
+            var password = Encoding.UTF8.GetString(passwordBytes).Trim();
+
+            foreach (char c in password)
+            {
+                securePassword.AppendChar(c);
+            }
+
+            securePassword.MakeReadOnly();
+            return securePassword;
+        }
+        finally
+        {
+            // Zero out sensitive data from memory
+            if (passwordBytes != null)
+            {
+                Array.Clear(passwordBytes, 0, passwordBytes.Length);
+            }
+        }
+    }
+}
+```
