@@ -77,79 +77,54 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     /// </summary>
     public sealed record Options
     {
-        /// <summary>
-        /// The directory path to monitor.
-        /// </summary>
         public required string Path { get; init; }
 
         /// <summary>
-        /// Health check interval to detect directory removal (default: 1 second).
         /// Very cheap operation (just Directory.Exists).
         /// </summary>
         public TimeSpan HealthCheckInterval { get; init; } = TimeSpan.FromSeconds(1);
 
         /// <summary>
-        /// Audit interval to detect silent event loss via metadata fingerprint (default: 60 seconds).
-        /// This is an O(files) operation but detects missed events reliably.
+        /// O(files) operation but detects missed events reliably.
         /// </summary>
         public TimeSpan AuditInterval { get; init; } = TimeSpan.FromSeconds(60);
 
         /// <summary>
-        /// Polling interval when in fallback mode (default: 5 seconds).
         /// Used when directory doesn't exist or watcher has failed.
         /// </summary>
         public TimeSpan PollingInterval { get; init; } = TimeSpan.FromSeconds(5);
 
-        /// <summary>
-        /// Enable automatic fallback to polling mode when errors occur (default: true).
-        /// </summary>
         public bool EnablePollingFallback { get; init; } = true;
-
-        /// <summary>
-        /// Enable automatic recovery from errors by restarting the watcher (default: true).
-        /// </summary>
         public bool AutoRecoverFromErrors { get; init; } = true;
-
-        /// <summary>
-        /// File filter pattern (default: "*" for all files).
-        /// </summary>
         public string Filter { get; init; } = "*";
+        public bool IncludeSubdirectories { get; init; }
 
         /// <summary>
-        /// Include subdirectories in monitoring (default: true).
+        /// 0 = root only, 1 = direct children, -1 = unlimited. Only applies when IncludeSubdirectories is true.
         /// </summary>
-        public bool IncludeSubdirectories { get; init; } = true;
+        public int MaxDepth { get; init; }
 
-        /// <summary>
-        /// Notify filters to watch (default: FileName | LastWrite | Size).
-        /// </summary>
         public NotifyFilters NotifyFilter { get; init; } = 
             NotifyFilters.FileName | 
             NotifyFilters.LastWrite | 
             NotifyFilters.Size;
 
         /// <summary>
-        /// Internal buffer size for FileSystemWatcher (default: 64KB).
         /// Increase for high-change-rate scenarios to avoid buffer overflow.
         /// </summary>
         public int InternalBufferSize { get; init; } = 64 * 1024;
 
         /// <summary>
-        /// Optional debounce time to reduce noise from rapid file changes (default: null = no debouncing).
         /// When set, multiple changes to the same file within this time window will only fire one event.
         /// </summary>
         public TimeSpan? DebounceTime { get; init; }
         
         /// <summary>
-        /// Enable adaptive content hashing during reconciliation for stronger change detection (default: false).
-        /// When enabled, computes partial content hash (first/last N bytes) for files with identical metadata.
+        /// Computes partial content hash (first/last N bytes) for files with identical metadata.
         /// Useful for scenarios where tools preserve mtime but change content.
         /// </summary>
         public bool EnableAdaptiveHashOnReconcile { get; init; }
         
-        /// <summary>
-        /// Number of bytes to hash from start/end of file when adaptive hashing is enabled (default: 64KB).
-        /// </summary>
         public int AdaptiveHashBytesPerEdge { get; init; } = 64 * 1024;
     }
 
@@ -158,44 +133,19 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     /// </summary>
     public event EventHandler<ModeChangedEventArgs>? ModeChanged;
 
-    /// <summary>
-    /// Raised when an error occurs in the underlying FileSystemWatcher.
-    /// </summary>
     public event EventHandler<ErrorEventArgs>? Error;
-
-    /// <summary>
-    /// Raised when a file is created.
-    /// </summary>
     public event EventHandler<FileSystemEventArgs>? Created;
-
-    /// <summary>
-    /// Raised when a file is changed.
-    /// </summary>
     public event EventHandler<FileSystemEventArgs>? Changed;
-
-    /// <summary>
-    /// Raised when a file is deleted.
-    /// </summary>
     public event EventHandler<FileSystemEventArgs>? Deleted;
-
-    /// <summary>
-    /// Raised when a file is renamed.
-    /// </summary>
     public event EventHandler<RenamedEventArgs>? Renamed;
 
     /// <summary>
-    /// Gets a channel reader that delivers all file system events in order.
-    /// This is useful for reactive programming scenarios where you want to process
-    /// events as a stream without subscribing to individual event handlers.
     /// Events are delivered in the same order they occurred.
     /// </summary>
     public ChannelReader<FileSystemEvent> Events => _publicEventChannel.Reader;
     
     private readonly Channel<FileSystemEvent> _publicEventChannel;
 
-    /// <summary>
-    /// Gets whether the monitor is currently using the native FileSystemWatcher (true) or polling mode (false).
-    /// </summary>
     public bool IsUsingWatcher
     {
         get
@@ -205,53 +155,14 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         }
     }
 
-    /// <summary>
-    /// Legacy property - use IsUsingWatcher instead.
-    /// </summary>
     [Obsolete("Use IsUsingWatcher instead")]
     public bool IsWatcherActive => IsUsingWatcher;
 
-    /// <summary>
-    /// Legacy property - use !IsUsingWatcher instead.
-    /// </summary>
     [Obsolete("Use !IsUsingWatcher instead")]
     public bool IsPolling => !IsUsingWatcher;
 
-    /// <summary>
-    /// Creates a new fluent builder for configuring a file system monitor for the specified directory.
-    /// </summary>
-    /// <param name="path">The directory path to monitor.</param>
-    /// <returns>A fluent builder for configuring the monitor.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="path"/> is null.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="path"/> is empty or whitespace.</exception>
-    /// <example>
-    /// <code>
-    /// var monitor = ResilientFileSystemMonitor
-    ///     .Watch(@"C:\config")
-    ///     .WithFilter("*.json")
-    ///     .WithDebounce(100)
-    ///     .OnChanged(OnConfigChanged)
-    ///     .Build();
-    /// </code>
-    /// </example>
     public static MonitorBuilder Watch(string path) => new MonitorBuilder(path);
 
-    /// <summary>
-    /// Creates a new fluent builder for configuring a file system monitor for the specified directory with a filter.
-    /// </summary>
-    /// <param name="path">The directory path to monitor.</param>
-    /// <param name="filter">The file filter pattern (e.g., "*.json", "*.txt").</param>
-    /// <returns>A fluent builder for configuring the monitor.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="path"/> or <paramref name="filter"/> is null.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="path"/> or <paramref name="filter"/> is empty or whitespace.</exception>
-    /// <example>
-    /// <code>
-    /// var monitor = ResilientFileSystemMonitor
-    ///     .Watch(@"C:\config", "*.json")
-    ///     .WithDebounce(100)
-    ///     .Build();
-    /// </code>
-    /// </example>
     public static MonitorBuilder Watch(string path, string filter) => new MonitorBuilder(path).WithFilter(filter);
 
     public ResilientFileSystemMonitor(Options options)
@@ -473,6 +384,10 @@ public sealed class ResilientFileSystemMonitor : IDisposable
 
     private bool ShouldEmitEvent(string fullPath)
     {
+        // Check depth limit first (if configured)
+        if (!IsWithinDepthLimit(fullPath))
+            return false;
+
         if (_options.DebounceTime == null)
             return true;
 
@@ -487,6 +402,26 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         
         _debounceTracker[key] = now;
         return true;
+    }
+
+    private bool IsWithinDepthLimit(string fullPath)
+    {
+        // If not monitoring subdirectories or unlimited depth, accept all
+        if (!_options.IncludeSubdirectories || _options.MaxDepth < 0)
+            return true;
+
+        // If maxDepth is 0, only accept files in root directory
+        if (_options.MaxDepth == 0)
+        {
+            var dir = Path.GetDirectoryName(fullPath);
+            return string.Equals(dir, _rootPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Calculate actual depth
+        var relativePath = GetRelativePath(fullPath);
+        var depth = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length - 1;
+        
+        return depth <= _options.MaxDepth;
     }
 
     #endregion

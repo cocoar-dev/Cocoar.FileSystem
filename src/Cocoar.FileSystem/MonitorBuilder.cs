@@ -9,7 +9,7 @@ public sealed class MonitorBuilder
     private string _filter = "*";
     private bool _enablePollingFallback = true;
     private bool _autoRecoverFromErrors = true;
-    private bool _includeSubdirectories = true;
+    private int _maxDepth; // 0 = no subdirectories, -1 = unlimited
     private TimeSpan _pollingInterval = TimeSpan.FromSeconds(5);
     private TimeSpan _healthCheckInterval = TimeSpan.FromSeconds(1);
     private TimeSpan _auditInterval = TimeSpan.FromSeconds(60);
@@ -34,10 +34,6 @@ public sealed class MonitorBuilder
         _path = path;
     }
 
-    /// <summary>
-    /// Sets the file filter pattern. Default is "*" (all files).
-    /// </summary>
-    /// <param name="filter">The filter pattern (e.g., "*.json", "*.txt").</param>
     public MonitorBuilder WithFilter(string filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -89,10 +85,8 @@ public sealed class MonitorBuilder
     }
 
     /// <summary>
-    /// Sets the debounce time to reduce noise from rapid file changes.
     /// Multiple changes to the same file within this window will only fire one event.
     /// </summary>
-    /// <param name="milliseconds">The debounce time in milliseconds.</param>
     public MonitorBuilder WithDebounce(int milliseconds)
     {
         if (milliseconds < 0)
@@ -103,10 +97,8 @@ public sealed class MonitorBuilder
     }
 
     /// <summary>
-    /// Sets the debounce time to reduce noise from rapid file changes.
     /// Multiple changes to the same file within this window will only fire one event.
     /// </summary>
-    /// <param name="debounceTime">The debounce time.</param>
     public MonitorBuilder WithDebounce(TimeSpan debounceTime)
     {
         if (debounceTime < TimeSpan.Zero)
@@ -117,7 +109,7 @@ public sealed class MonitorBuilder
     }
 
     /// <summary>
-    /// Disables automatic recovery from errors. The monitor will raise an error event but not attempt to restart.
+    /// The monitor will raise an error event but not attempt to restart.
     /// </summary>
     public MonitorBuilder WithoutAutoRecovery()
     {
@@ -126,19 +118,26 @@ public sealed class MonitorBuilder
     }
 
     /// <summary>
-    /// Configures whether to monitor subdirectories. Default is true.
+    /// True monitors all subdirectories (unlimited depth), false monitors only the root directory.
     /// </summary>
-    /// <param name="include">True to monitor subdirectories, false to monitor only the root directory.</param>
     public MonitorBuilder IncludeSubdirectories(bool include = true)
     {
-        _includeSubdirectories = include;
+        _maxDepth = include ? -1 : 0; // unlimited if true, none if false
         return this;
     }
 
     /// <summary>
-    /// Sets the notify filters to watch. Default is FileName | LastWrite | Size.
+    /// 0 = root only, 1 = direct children, 2+ = specific depth, -1 = unlimited.
     /// </summary>
-    /// <param name="filters">The notify filters.</param>
+    public MonitorBuilder IncludeSubdirectories(int maxDepth)
+    {
+        if (maxDepth < -1)
+            throw new ArgumentException("Max depth must be -1 (unlimited) or greater than or equal to 0.", nameof(maxDepth));
+        
+        _maxDepth = maxDepth;
+        return this;
+    }
+
     public MonitorBuilder WithNotifyFilters(NotifyFilters filters)
     {
         _notifyFilter = filters;
@@ -202,10 +201,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for file creation events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnCreated(EventHandler<FileSystemEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -213,10 +208,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for file change events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnChanged(EventHandler<FileSystemEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -224,10 +215,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for file deletion events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnDeleted(EventHandler<FileSystemEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -235,10 +222,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for file rename events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnRenamed(EventHandler<RenamedEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -246,10 +229,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for error events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnError(EventHandler<ErrorEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -257,10 +236,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Registers a handler for monitoring mode change events.
-    /// </summary>
-    /// <param name="handler">The event handler.</param>
     public MonitorBuilder OnModeChanged(EventHandler<ModeChangedEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -268,10 +243,6 @@ public sealed class MonitorBuilder
         return this;
     }
 
-    /// <summary>
-    /// Builds and starts the configured ResilientFileSystemMonitor.
-    /// </summary>
-    /// <returns>A configured and started monitor instance.</returns>
     public ResilientFileSystemMonitor Build()
     {
         if (string.IsNullOrWhiteSpace(_path))
@@ -283,7 +254,8 @@ public sealed class MonitorBuilder
             Filter = _filter,
             EnablePollingFallback = _enablePollingFallback,
             AutoRecoverFromErrors = _autoRecoverFromErrors,
-            IncludeSubdirectories = _includeSubdirectories,
+            IncludeSubdirectories = _maxDepth != 0,
+            MaxDepth = _maxDepth,
             PollingInterval = _pollingInterval,
             HealthCheckInterval = _healthCheckInterval,
             AuditInterval = _auditInterval,
@@ -296,7 +268,6 @@ public sealed class MonitorBuilder
 
         var monitor = new ResilientFileSystemMonitor(options);
         
-        // Attach event handlers
         if (_created != null) monitor.Created += _created;
         if (_changed != null) monitor.Changed += _changed;
         if (_deleted != null) monitor.Deleted += _deleted;

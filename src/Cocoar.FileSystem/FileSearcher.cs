@@ -3,44 +3,12 @@ using System.IO.Enumeration;
 namespace Cocoar.FileSystem;
 
 /// <summary>
-/// High-performance file system searcher using FileSystemEnumerable for efficient directory traversal.
+/// High-performance file system searcher using FileSystemEnumerable.
 /// </summary>
 public static class FileSearcher
 {
-    /// <summary>
-    /// Creates a new fluent builder for searching files in the specified directory.
-    /// </summary>
-    /// <param name="searchPath">The directory path to search.</param>
-    /// <returns>A fluent builder for configuring the search.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="searchPath"/> is null.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="searchPath"/> is empty or whitespace.</exception>
-    /// <example>
-    /// <code>
-    /// var files = FileSearcher
-    ///     .InDirectory(@"C:\projects")
-    ///     .WithPattern("*.cs")
-    ///     .Excluding("bin", "obj")
-    ///     .ToList();
-    /// </code>
-    /// </example>
     public static SearchBuilder InDirectory(string searchPath) => new SearchBuilder(searchPath);
 
-    /// <summary>
-    /// Creates a new fluent builder for searching files in the specified directory with a pattern.
-    /// </summary>
-    /// <param name="searchPath">The directory path to search.</param>
-    /// <param name="searchPattern">The search pattern to match files against (e.g., "*.txt", "*").</param>
-    /// <returns>A fluent builder for configuring the search.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="searchPath"/> or <paramref name="searchPattern"/> is null.</exception>
-    /// <exception cref="ArgumentException">When <paramref name="searchPath"/> or <paramref name="searchPattern"/> is empty or whitespace.</exception>
-    /// <example>
-    /// <code>
-    /// var files = FileSearcher
-    ///     .Search(@"C:\projects", "*.cs")
-    ///     .Excluding("bin", "obj")
-    ///     .ToList();
-    /// </code>
-    /// </example>
     public static SearchBuilder Search(string searchPath, string searchPattern) => 
         new SearchBuilder(searchPath).WithPattern(searchPattern);
 
