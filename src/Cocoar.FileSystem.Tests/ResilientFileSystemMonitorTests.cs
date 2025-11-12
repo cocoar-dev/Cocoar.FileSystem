@@ -50,7 +50,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
         TimeSpan? auditInterval = null,
         TimeSpan? pollingInterval = null,
         string filter = "*",
-        bool includeSubdirectories = true)
+        bool includeSubdirectories = true,
+        int? maxDepth = null)
     {
         var options = new ResilientFileSystemMonitor.Options
         {
@@ -62,7 +63,8 @@ public sealed class ResilientFileSystemMonitorTests : IDisposable
             AuditInterval = auditInterval ?? TimeSpan.FromSeconds(2),
             PollingInterval = pollingInterval ?? TimeSpan.FromMilliseconds(500),
             Filter = filter,
-            IncludeSubdirectories = includeSubdirectories
+            IncludeSubdirectories = includeSubdirectories,
+            MaxDepth = maxDepth ?? (includeSubdirectories ? -1 : 0)
         };
 
         var monitor = new ResilientFileSystemMonitor(options);

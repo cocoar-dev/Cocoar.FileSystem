@@ -20,10 +20,6 @@ public sealed class SearchBuilder : IEnumerable<string>
         _searchPath = searchPath;
     }
 
-    /// <summary>
-    /// Sets the search pattern to match files against.
-    /// </summary>
-    /// <param name="pattern">The search pattern (e.g., "*.txt", "*.json").</param>
     public SearchBuilder WithPattern(string pattern)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
@@ -31,10 +27,6 @@ public sealed class SearchBuilder : IEnumerable<string>
         return this;
     }
 
-    /// <summary>
-    /// Excludes the specified folder names from the search.
-    /// </summary>
-    /// <param name="folderNames">The folder names to exclude.</param>
     public SearchBuilder Excluding(params string[] folderNames)
     {
         ArgumentNullException.ThrowIfNull(folderNames);
@@ -50,9 +42,8 @@ public sealed class SearchBuilder : IEnumerable<string>
     }
 
     /// <summary>
-    /// Sets the maximum depth to recurse into subdirectories.
+    /// 0 = current directory only, 1 = current + one level, etc. Use null for unlimited depth.
     /// </summary>
-    /// <param name="depth">The maximum depth (0 = current directory only, 1 = current + one level, etc.). Use null for unlimited depth.</param>
     public SearchBuilder WithMaxDepth(int? depth)
     {
         if (depth < 0)
@@ -62,9 +53,6 @@ public sealed class SearchBuilder : IEnumerable<string>
         return this;
     }
 
-    /// <summary>
-    /// Recurses through all subdirectories without depth limit.
-    /// </summary>
     public SearchBuilder Recursively()
     {
         _maxDepth = null;
@@ -72,10 +60,8 @@ public sealed class SearchBuilder : IEnumerable<string>
     }
 
     /// <summary>
-    /// Enumerates files matching the configured criteria.
-    /// This is a lazy operation that yields results as they are found.
+    /// Lazy operation that yields results as they are found.
     /// </summary>
-    /// <returns>An enumerable collection of full file paths.</returns>
     public IEnumerable<string> Enumerate()
     {
         return FileSearcher.EnumerateFiles(
@@ -85,16 +71,8 @@ public sealed class SearchBuilder : IEnumerable<string>
             _maxDepth);
     }
 
-    /// <summary>
-    /// Materializes all matching files into a list.
-    /// </summary>
-    /// <returns>A list of full file paths.</returns>
     public List<string> ToList() => Enumerate().ToList();
 
-    /// <summary>
-    /// Materializes all matching files into an array.
-    /// </summary>
-    /// <returns>An array of full file paths.</returns>
     public string[] ToArray() => Enumerate().ToArray();
 
     /// <summary>

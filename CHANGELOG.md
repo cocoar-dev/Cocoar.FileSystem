@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.0.0] - 2025-11-12
+
+### Added
+- **Subdirectory Depth Control** for `ResilientFileSystemMonitor`
+  - `.IncludeSubdirectories(int maxDepth)` - Monitor subdirectories up to a specific depth (0, 1, 2, etc.)
+  - `.IncludeSubdirectories(bool include = true)` - Simple on/off (true = unlimited, false = root only)
+  - Use `-1` for unlimited depth
+
+### Changed
+- **BREAKING**: Default behavior changed from recursive to non-recursive
+  - `IncludeSubdirectories` now defaults to `false` (previously `true`)
+  - To maintain previous behavior, explicitly call `.IncludeSubdirectories()`
+  - This improves security and performance by making recursive watching opt-in
+
 ## [1.0.0] - 2025-11-05
 
 ### Added

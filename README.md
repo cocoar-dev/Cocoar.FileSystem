@@ -38,9 +38,16 @@ var monitor = ResilientFileSystemMonitor
     .OnChanged((sender, e) => Console.WriteLine($"Changed: {e.Name}"))
     .OnCreated((sender, e) => Console.WriteLine($"Created: {e.Name}"))
     .Build();
+
+// With subdirectory monitoring (depth control):
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\configs", "*.json")
+    .IncludeSubdirectories(2) // Monitor up to 2 levels deep
+    .OnChanged((sender, e) => Console.WriteLine($"Changed: {e.FullPath}"))
+    .Build();
 ```
 
-**Key Features:** Auto-recovery, debouncing, reactive streams, health checks  
+**Key Features:** Auto-recovery, debouncing, depth control, reactive streams, health checks  
 📖 **[Full Guide](docs/resilient-file-system-monitor.md)** | **[Reactive Examples](docs/reactive-examples.md)**
 
 ---
@@ -90,6 +97,7 @@ finally
 ## 📚 Documentation
 
 - **[ResilientFileSystemMonitor Guide](docs/resilient-file-system-monitor.md)** - Detailed usage guide
+- **[Subdirectory Depth Control](docs/subdirectory-depth-control.md)** - Fine-grained recursive monitoring
 - **[FileReader Guide](docs/file-reader.md)** - Secure file reading with shared access
 - **[Examples](docs/examples.md)** - More usage examples
 - **[Reactive Examples](docs/reactive-examples.md)** - Advanced reactive patterns with Rx.NET
@@ -113,11 +121,30 @@ finally
 | `Path` | `string` | (required) | Directory path to monitor |
 | `Filter` | `string` | `"*"` | File filter pattern (e.g., "*.json", "*.txt") |
 | `IncludeSubdirectories` | `bool` | `false` | Monitor subdirectories recursively |
-| `NotifyFilter` | `NotifyFilters` | `LastWrite \| FileName \| CreationTime` | Types of changes to watch for |
+| `MaxDepth` | `int` | `0` | Maximum subdirectory depth (0=root only, -1=unlimited) |
+| `NotifyFilter` | `NotifyFilters` | `LastWrite \| FileName \| Size` | Types of changes to watch for |
 | `EnablePollingFallback` | `bool` | `true` | Enable automatic polling fallback |
 | `PollingInterval` | `TimeSpan` | `5 seconds` | How often to poll when in fallback mode |
 | `AutoRecoverFromErrors` | `bool` | `true` | Automatically switch to polling on errors |
 | `DebounceTime` | `TimeSpan?` | `null` | Optional debouncing to reduce event noise |
+
+### Subdirectory Depth Control
+
+Control how deep to monitor subdirectories:
+
+```csharp
+// Don't monitor subdirectories (default)
+.Watch(@"C:\certs")  // Only watches C:\certs\*.pfx
+
+// Monitor all subdirectories (unlimited depth)
+.Watch(@"C:\certs")
+.IncludeSubdirectories()  // or .IncludeSubdirectories(true) or .IncludeSubdirectories(-1)
+
+// Monitor with depth limit
+.Watch(@"C:\certs")
+.IncludeSubdirectories(1)  // Only direct children: C:\certs\prod\*.pfx
+.IncludeSubdirectories(2)  // Two levels: C:\certs\prod\2025\*.pfx
+```
 
 ## 🧵 Thread Safety
 

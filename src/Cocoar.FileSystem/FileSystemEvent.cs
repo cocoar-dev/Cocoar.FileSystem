@@ -2,7 +2,6 @@ namespace Cocoar.FileSystem;
 
 /// <summary>
 /// Unified event type for all file system changes.
-/// Allows consuming all events from a single stream.
 /// </summary>
 public sealed class FileSystemEvent
 {

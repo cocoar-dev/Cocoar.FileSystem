@@ -58,7 +58,7 @@ var monitor = ResilientFileSystemMonitor
     .WithPollingFallback(TimeSpan.FromSeconds(3))
     .WithHealthCheckInterval(TimeSpan.FromSeconds(1))
     .WithAuditInterval(TimeSpan.FromMinutes(1))
-    .IncludeSubdirectories(true)
+    .IncludeSubdirectories(2) // Monitor up to 2 levels deep
     .OnCreated(OnFileCreated)
     .OnChanged(OnFileChanged)
     .OnDeleted(OnFileDeleted)
@@ -66,6 +66,42 @@ var monitor = ResilientFileSystemMonitor
     .OnModeChanged(OnModeChanged)
     .Build();
 ```
+
+### Subdirectory Depth Control
+
+Control how deeply to monitor subdirectories:
+
+```csharp
+// Don't monitor subdirectories (default)
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs", "*.pfx")
+    .Build();  // Only monitors C:\certs\*.pfx
+
+// Monitor all subdirectories (unlimited depth)
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs", "*.pfx")
+    .IncludeSubdirectories()  // or .IncludeSubdirectories(true) or .IncludeSubdirectories(-1)
+    .Build();  // Monitors all *.pfx files at any depth
+
+// Monitor with depth limit (recommended for large trees)
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs", "*.pfx")
+    .IncludeSubdirectories(1)  // Only direct children
+    .Build();  // Monitors C:\certs\*.pfx and C:\certs\prod\*.pfx, but not deeper
+
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\projects", "*.cs")
+    .IncludeSubdirectories(3)  // Up to 3 levels deep
+    .Build();  // Good for avoiding deep node_modules or bin/obj folders
+```
+
+**Depth Values:**
+- `0` - No subdirectories (root only) - **default**
+- `1` - Direct children only
+- `2` - Children and grandchildren
+- `-1` - Unlimited depth (same as `true`)
+
+**Performance Tip:** Use depth limits to avoid monitoring large dependency trees like `node_modules`, `.git`, `bin`, `obj`.
 
 ### Options Pattern (Alternative)
 
@@ -117,7 +153,8 @@ else
 | `Path` | `string` | (required) | Directory path to monitor |
 | `Filter` | `string` | `"*"` | File filter pattern (e.g., "*.json", "*.pfx") |
 | `IncludeSubdirectories` | `bool` | `false` | Monitor subdirectories recursively |
-| `NotifyFilter` | `NotifyFilters` | `LastWrite \| FileName \| CreationTime` | Types of changes to watch for |
+| `MaxDepth` | `int` | `0` | Maximum subdirectory depth (0=root only, 1=direct children, -1=unlimited) |
+| `NotifyFilter` | `NotifyFilters` | `LastWrite \| FileName \| Size` | Types of changes to watch for |
 | `EnablePollingFallback` | `bool` | `true` | Enable automatic polling fallback |
 | `PollingInterval` | `TimeSpan` | `5 seconds` | How often to poll when in fallback mode |
 | `AutoRecoverFromErrors` | `bool` | `true` | Automatically switch to polling on errors |

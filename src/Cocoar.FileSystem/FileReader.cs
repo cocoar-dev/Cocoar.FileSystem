@@ -1,23 +1,15 @@
 namespace Cocoar.FileSystem;
 
 /// <summary>
-/// Provides secure file reading operations with shared access support.
-/// Particularly useful when reading sensitive content as bytes to avoid immutable strings in memory.
+/// Secure file reading with shared access. Useful for reading sensitive content as bytes to avoid immutable strings in memory.
 /// </summary>
 public static class FileReader
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 
     /// <summary>
-    /// Reads all bytes from a file with shared read/write access.
+    /// Shared read/write access.
     /// </summary>
-    /// <param name="path">Path to the file to read</param>
-    /// <param name="stripUtf8Bom">If true, removes UTF-8 BOM (EF BB BF) from the beginning if present</param>
-    /// <returns>Byte array containing the file contents</returns>
-    /// <exception cref="ArgumentNullException">When path is null</exception>
-    /// <exception cref="ArgumentException">When path is empty or whitespace</exception>
-    /// <exception cref="FileNotFoundException">When file does not exist</exception>
-    /// <exception cref="IOException">When file cannot be read completely</exception>
     public static byte[] ReadAllBytes(string path, bool stripUtf8Bom = false)
     {
         ArgumentNullException.ThrowIfNull(path);
@@ -45,15 +37,8 @@ public static class FileReader
     }
 
     /// <summary>
-    /// Attempts to read all bytes from a file with shared read/write access.
-    /// Returns null if the file does not exist.
+    /// Shared read/write access. Returns null if file does not exist.
     /// </summary>
-    /// <param name="path">Path to the file to read</param>
-    /// <param name="stripUtf8Bom">If true, removes UTF-8 BOM (EF BB BF) from the beginning if present</param>
-    /// <returns>Byte array containing the file contents, or null if file does not exist</returns>
-    /// <exception cref="ArgumentNullException">When path is null</exception>
-    /// <exception cref="ArgumentException">When path is empty or whitespace</exception>
-    /// <exception cref="IOException">When file exists but cannot be read completely</exception>
     public static byte[]? TryReadAllBytes(string path, bool stripUtf8Bom = false)
     {
         ArgumentNullException.ThrowIfNull(path);
