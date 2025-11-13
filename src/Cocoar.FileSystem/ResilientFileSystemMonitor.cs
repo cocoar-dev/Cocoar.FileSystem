@@ -683,6 +683,7 @@ public sealed class ResilientFileSystemMonitor : IDisposable
             var enumerationOptions = new EnumerationOptions
             {
                 RecurseSubdirectories = _options.IncludeSubdirectories,
+                MaxRecursionDepth = _options.MaxDepth < 0 ? int.MaxValue : _options.MaxDepth,
                 IgnoreInaccessible = true,
                 AttributesToSkip = FileAttributes.System | FileAttributes.ReparsePoint
             };
