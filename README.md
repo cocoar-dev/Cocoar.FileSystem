@@ -39,6 +39,13 @@ var monitor = ResilientFileSystemMonitor
     .OnCreated((sender, e) => Console.WriteLine($"Created: {e.Name}"))
     .Build();
 
+// Multiple file patterns (certificates example):
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs")
+    .WithFilter("*.pfx", "*.p12", "*.cer") // Monitor multiple extensions
+    .OnChanged((sender, e) => Console.WriteLine($"Certificate changed: {e.Name}"))
+    .Build();
+
 // With subdirectory monitoring (depth control):
 var monitor = ResilientFileSystemMonitor
     .Watch(@"C:\configs", "*.json")
@@ -119,7 +126,7 @@ finally
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `Path` | `string` | (required) | Directory path to monitor |
-| `Filter` | `string` | `"*"` | File filter pattern (e.g., "*.json", "*.txt") |
+| `Filter` | `string` | `"*"` | File filter pattern (e.g., "*.json", "*.txt") - supports multiple patterns |
 | `IncludeSubdirectories` | `bool` | `false` | Monitor subdirectories recursively |
 | `MaxDepth` | `int` | `0` | Maximum subdirectory depth (0=root only, -1=unlimited) |
 | `NotifyFilter` | `NotifyFilters` | `LastWrite \| FileName \| Size` | Types of changes to watch for |

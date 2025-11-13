@@ -78,18 +78,15 @@ public class CertificateWatcher
     
     public void Watch(string certificatePath)
     {
-        _monitor = new ResilientFileSystemMonitor(new ResilientFileSystemMonitor.Options
-        {
-            Path = certificatePath,
-            Filter = "*.pfx",
-            EnablePollingFallback = true,
-            PollingInterval = TimeSpan.FromSeconds(30),
-            DebounceTime = TimeSpan.FromSeconds(2)
-        });
-        
-        _monitor.Changed += OnCertificateChanged;
-        _monitor.Error += OnError;
-        _monitor.ModeChanged += OnModeChanged;
+        // Monitor multiple certificate formats
+        _monitor = ResilientFileSystemMonitor
+            .Watch(certificatePath)
+            .WithFilter("*.pfx", "*.p12", "*.cer")  // Multiple formats
+            .WithDebounce(TimeSpan.FromSeconds(2))
+            .OnChanged(OnCertificateChanged)
+            .OnError(OnError)
+            .OnModeChanged(OnModeChanged)
+            .Build();
     }
     
     private void OnCertificateChanged(object? sender, FileSystemEventArgs e)

@@ -97,6 +97,12 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         public bool EnablePollingFallback { get; init; } = true;
         public bool AutoRecoverFromErrors { get; init; } = true;
         public string Filter { get; init; } = "*";
+        
+        /// <summary>
+        /// Multiple file patterns. When specified, overrides Filter property.
+        /// </summary>
+        public string[]? Filters { get; init; }
+        
         public bool IncludeSubdirectories { get; init; }
 
         /// <summary>
@@ -388,6 +394,10 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         if (!IsWithinDepthLimit(fullPath))
             return false;
 
+        // Check pattern match (if multiple patterns configured)
+        if (!MatchesFilter(fullPath))
+            return false;
+
         if (_options.DebounceTime == null)
             return true;
 
@@ -402,6 +412,27 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         
         _debounceTracker[key] = now;
         return true;
+    }
+
+    private bool MatchesFilter(string fullPath)
+    {
+        // If multiple patterns configured, check against all
+        if (_options.Filters != null && _options.Filters.Length > 0)
+        {
+            var fileName = Path.GetFileName(fullPath);
+            return _options.Filters.Any(pattern => MatchesPattern(fileName, pattern));
+        }
+        
+        // Single pattern is handled by FileSystemWatcher.Filter
+        return true;
+    }
+
+    private static bool MatchesPattern(string fileName, string pattern)
+    {
+        // Uses the same pattern matching as FileSearcher (FileSystemName.MatchesSimpleExpression)
+        // Supports DOS-style wildcards: * and ?
+        // Examples: *.txt, test-*.log, file?.dat
+        return System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, fileName);
     }
 
     private bool IsWithinDepthLimit(string fullPath)
@@ -649,10 +680,6 @@ public sealed class ResilientFileSystemMonitor : IDisposable
 
         try
         {
-            var searchOption = _options.IncludeSubdirectories 
-                ? SearchOption.AllDirectories 
-                : SearchOption.TopDirectoryOnly;
-            
             var enumerationOptions = new EnumerationOptions
             {
                 RecurseSubdirectories = _options.IncludeSubdirectories,
@@ -660,12 +687,31 @@ public sealed class ResilientFileSystemMonitor : IDisposable
                 AttributesToSkip = FileAttributes.System | FileAttributes.ReparsePoint
             };
 
-            foreach (var file in Directory.EnumerateFiles(rootPath, _options.Filter, enumerationOptions))
+            // Handle multiple patterns
+            if (_options.Filters != null && _options.Filters.Length > 0)
             {
-                if (TryStatFile(file, out var meta))
+                foreach (var pattern in _options.Filters)
                 {
-                    var relPath = GetRelativePath(file);
-                    snapshot[relPath] = meta;
+                    foreach (var file in Directory.EnumerateFiles(rootPath, pattern, enumerationOptions))
+                    {
+                        if (TryStatFile(file, out var meta))
+                        {
+                            var relPath = GetRelativePath(file);
+                            snapshot[relPath] = meta;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Single pattern
+                foreach (var file in Directory.EnumerateFiles(rootPath, _options.Filter, enumerationOptions))
+                {
+                    if (TryStatFile(file, out var meta))
+                    {
+                        var relPath = GetRelativePath(file);
+                        snapshot[relPath] = meta;
+                    }
                 }
             }
         }

@@ -67,6 +67,41 @@ var monitor = ResilientFileSystemMonitor
     .Build();
 ```
 
+### Multiple File Patterns
+
+Monitor multiple file extensions or patterns:
+
+```csharp
+// Monitor multiple certificate formats
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs")
+    .WithFilter("*.pfx", "*.p12", "*.cer")  // All three formats
+    .OnChanged((sender, e) => ReloadCertificate(e.FullPath))
+    .Build();
+
+// Additive pattern building
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\logs")
+    .WithFilter("*.log")        // Add .log files
+    .WithFilter("*.txt")        // Add .txt files
+    .WithFilter("error-*.json") // Add error JSON files
+    .Build();
+
+// Clear and reset patterns
+var builder = ResilientFileSystemMonitor.Watch(@"C:\data");
+builder.WithFilter("*.tmp");
+builder.ClearFilters();  // Remove all patterns
+builder.WithFilter("*.dat", "*.bin");  // Start fresh
+var monitor = builder.Build();
+```
+
+**Pattern Matching:**
+- Uses DOS-style wildcards: `*` (any characters) and `?` (single character)
+- Matches against filename only (not full path) for performance
+- Patterns are additive - multiple `WithFilter()` calls add patterns
+- Use `ClearFilters()` to reset all patterns
+- Examples: `*.pfx`, `backup-*.log`, `config-????.json`
+
 ### Subdirectory Depth Control
 
 Control how deeply to monitor subdirectories:
