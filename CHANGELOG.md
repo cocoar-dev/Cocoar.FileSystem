@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-11-13
+
+### Added
+- **Multiple File Pattern Support** for `ResilientFileSystemMonitor`
+  - `.WithFilter(params string[] patterns)` - Monitor multiple file patterns (e.g., `"*.pfx", "*.p12", "*.cer"`)
+  - Additive behavior - calling `.WithFilter()` multiple times adds patterns
+  - `.ClearFilters()` - Remove all configured patterns
+  - Uses `FileSystemName.MatchesSimpleExpression` for consistent pattern matching with `FileSearcher`
+  - Supports DOS-style wildcards: `*` (any characters) and `?` (single character)
+  - Filename-only matching (not full path) for performance
+
 ## [2.0.0] - 2025-11-12
 
 ### Added

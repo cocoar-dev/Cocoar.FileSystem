@@ -7,6 +7,7 @@ public sealed class MonitorBuilder
 {
     private string? _path;
     private string _filter = "*";
+    private List<string>? _filters;
     private bool _enablePollingFallback = true;
     private bool _autoRecoverFromErrors = true;
     private int _maxDepth; // 0 = no subdirectories, -1 = unlimited
@@ -34,13 +35,37 @@ public sealed class MonitorBuilder
         _path = path;
     }
 
-    public MonitorBuilder WithFilter(string filter)
+    /// <summary>
+    /// Adds file patterns to monitor. Can be called multiple times to add more patterns.
+    /// Patterns are matched against filenames only (not full paths).
+    /// Supports DOS-style wildcards: * (any characters) and ? (single character).
+    /// </summary>
+    /// <param name="patterns">One or more file patterns (e.g., "*.txt", "test-*.log")</param>
+    /// <example>
+    /// .WithFilter("*.pfx", "*.p12", "*.cer")
+    /// .WithFilter("*.json")  // Adds to existing patterns
+    /// </example>
+    public MonitorBuilder WithFilter(params string[] patterns)
     {
-        ArgumentNullException.ThrowIfNull(filter);
-        if (string.IsNullOrWhiteSpace(filter))
-            throw new ArgumentException("Filter cannot be empty or whitespace.", nameof(filter));
+        ArgumentNullException.ThrowIfNull(patterns);
+        if (patterns.Length == 0)
+            throw new ArgumentException("At least one pattern must be specified.", nameof(patterns));
+        if (patterns.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("Patterns cannot be null or whitespace.", nameof(patterns));
         
-        _filter = filter;
+        _filters ??= new List<string>();
+        _filters.AddRange(patterns);
+        _filter = "*"; // Set wildcard for FileSystemWatcher, actual filtering in ShouldEmitEvent
+        return this;
+    }
+
+    /// <summary>
+    /// Clears all previously configured file patterns.
+    /// </summary>
+    public MonitorBuilder ClearFilters()
+    {
+        _filters?.Clear();
+        _filter = "*";
         return this;
     }
 
@@ -252,6 +277,7 @@ public sealed class MonitorBuilder
         {
             Path = _path,
             Filter = _filter,
+            Filters = _filters?.ToArray(),
             EnablePollingFallback = _enablePollingFallback,
             AutoRecoverFromErrors = _autoRecoverFromErrors,
             IncludeSubdirectories = _maxDepth != 0,
