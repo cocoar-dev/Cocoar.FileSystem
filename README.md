@@ -52,6 +52,19 @@ var monitor = ResilientFileSystemMonitor
     .IncludeSubdirectories(2) // Monitor up to 2 levels deep
     .OnChanged((sender, e) => Console.WriteLine($"Changed: {e.FullPath}"))
     .Build();
+
+// Detect folder renames (certificate rotation scenario):
+var monitor = ResilientFileSystemMonitor
+    .Watch(@"C:\certs")
+    .WithFilter("*.pfx")
+    .IncludeSubdirectories()
+    .OnRenamed((sender, e) => 
+    {
+        // Fires when folders containing .pfx files are renamed
+        // OR when individual .pfx files are renamed
+        Console.WriteLine($"Renamed: {e.OldFullPath} -> {e.FullPath}");
+    })
+    .Build();
 ```
 
 **Key Features:** Auto-recovery, debouncing, depth control, reactive streams, health checks  
@@ -61,19 +74,41 @@ var monitor = ResilientFileSystemMonitor
 
 ### High-Performance File Search
 
-Fast, lazy-evaluated directory traversal:
+Fast, lazy-evaluated directory traversal with fluent API:
 
 ```csharp
 using Cocoar.FileSystem;
 
+// Find all C# files in a project (excluding build folders)
 var codeFiles = FileSearcher
     .Search(@"C:\repos\myproject", "*.cs")
     .Excluding("bin", "obj", "node_modules")
     .WithMaxDepth(5)
     .ToList();
+
+// Multiple file patterns (harmonized with ResilientFileSystemMonitor API)
+var projectFiles = FileSearcher
+    .InDirectory(@"C:\repos\myapp")
+    .WithFilter("*.cs", "*.csproj", "*.json")
+    .IncludeSubdirectories(2)  // Search 2 levels deep
+    .ToList();
+
+// Lazy evaluation with LINQ
+var largeFiles = FileSearcher
+    .InDirectory(@"C:\data")
+    .WithPattern("*.log")
+    .Recursively()
+    .Where(file => new FileInfo(file).Length > 1_000_000)
+    .Take(10);
+
+// Search only current directory (no recursion)
+var configs = FileSearcher
+    .Search(@"C:\app", "*.json")
+    .WithMaxDepth(0)  // Current directory only
+    .ToArray();
 ```
 
-**Key Features:** Lazy evaluation, depth limits, exclusion patterns, LINQ support  
+**Key Features:** Lazy evaluation, depth limits, exclusion patterns, LINQ support, efficient for large directories  
 📖 **[Examples](docs/examples.md#high-performance-file-search)**
 
 ---

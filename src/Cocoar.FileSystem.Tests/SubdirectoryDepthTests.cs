@@ -1,3 +1,5 @@
+using Cocoar.FileSystem.Tests.TestUtilities;
+
 namespace Cocoar.FileSystem.Tests;
 
 /// <summary>
@@ -272,7 +274,14 @@ public sealed class SubdirectoryDepthTests : IDisposable
         File.WriteAllText(Path.Combine(level1, "l1.txt"), "l1");
         File.WriteAllText(Path.Combine(level2, "l2.txt"), "l2");
         File.WriteAllText(Path.Combine(level3, "l3.txt"), "l3"); // Too deep!
-        await Task.Delay(500);
+        
+        // Wait for expected events (3 files within depth limit)
+        await ActiveWaitHelpers.WaitUntilAsync(
+            () => { lock (lockObj) return createdFiles.Count >= 3; },
+            timeout: TimeSpan.FromSeconds(3));
+        
+        // Give extra time to ensure no unexpected 4th event arrives
+        await Task.Delay(300);
 
         // Assert
         lock (lockObj)
