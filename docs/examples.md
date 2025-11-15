@@ -470,3 +470,195 @@ public class CredentialReader
     }
 }
 ```
+
+## High-Performance File Search
+
+### Finding Code Files with Exclusions
+
+Search for source files while excluding build and dependency folders:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class CodeAnalyzer
+{
+    public List<string> FindSourceFiles(string projectRoot)
+    {
+        // Find all C# files, excluding common build/dependency folders
+        var sourceFiles = FileSearcher
+            .Search(projectRoot, "*.cs")
+            .Excluding("bin", "obj", "packages", "node_modules", ".git")
+            .Recursively()
+            .ToList();
+        
+        Console.WriteLine($"Found {sourceFiles.Count} C# files");
+        return sourceFiles;
+    }
+}
+```
+
+### Lazy Evaluation with LINQ
+
+Use LINQ to process files as they're discovered without loading all results into memory:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class LargeFileFinder
+{
+    public void FindAndProcessLargeFiles(string searchPath)
+    {
+        // Lazy evaluation - files are found and processed one at a time
+        var largeLogFiles = FileSearcher
+            .InDirectory(searchPath)
+            .WithPattern("*.log")
+            .WithMaxDepth(3)
+            .Where(file => new FileInfo(file).Length > 10_000_000)  // > 10 MB
+            .OrderByDescending(file => new FileInfo(file).Length)
+            .Take(10);  // Only get top 10
+        
+        foreach (var file in largeLogFiles)
+        {
+            Console.WriteLine($"Large file: {file} ({new FileInfo(file).Length:N0} bytes)");
+            ArchiveFile(file);
+        }
+    }
+    
+    private void ArchiveFile(string filePath) { /* ... */ }
+}
+```
+
+### Depth-Limited Search
+
+Control how deep the search recurses into subdirectories:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class ConfigurationScanner
+{
+    public void ScanConfigs(string appRoot)
+    {
+        // Only search current directory (no subdirectories)
+        var rootConfigs = FileSearcher
+            .Search(appRoot, "*.json")
+            .WithMaxDepth(0)  // 0 = current directory only
+            .ToList();
+        
+        // Search up to 2 levels deep
+        var nestedConfigs = FileSearcher
+            .Search(appRoot, "*.json")
+            .WithMaxDepth(2)  // appRoot + 2 levels of subdirectories
+            .Excluding("node_modules")
+            .ToList();
+        
+        // Unlimited depth (all subdirectories)
+        var allConfigs = FileSearcher
+            .Search(appRoot, "*.json")
+            .Recursively()  // Same as .WithMaxDepth(null)
+            .ToList();
+        
+        Console.WriteLine($"Root: {rootConfigs.Count}, Nested: {nestedConfigs.Count}, All: {allConfigs.Count}");
+    }
+}
+```
+
+### Multiple Search Operations
+
+Combine multiple searches efficiently:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class AssetScanner
+{
+    public Dictionary<string, List<string>> CategorizeAssets(string projectPath)
+    {
+        var result = new Dictionary<string, List<string>>();
+        
+        // Images
+        result["images"] = FileSearcher
+            .InDirectory(Path.Combine(projectPath, "assets"))
+            .WithPattern("*.png")
+            .Recursively()
+            .ToList();
+        
+        // Stylesheets
+        result["styles"] = FileSearcher
+            .InDirectory(Path.Combine(projectPath, "styles"))
+            .WithPattern("*.css")
+            .Excluding("dist", "build")
+            .ToList();
+        
+        // Scripts
+        result["scripts"] = FileSearcher
+            .InDirectory(Path.Combine(projectPath, "src"))
+            .WithPattern("*.js")
+            .WithMaxDepth(5)
+            .ToList();
+        
+        return result;
+    }
+}
+```
+
+### Finding Recent Files
+
+Combine FileSearcher with LINQ and FileInfo for advanced filtering:
+
+```csharp
+using Cocoar.FileSystem;
+
+public class RecentFilesFinder
+{
+    public List<string> FindRecentlyModifiedFiles(string searchPath, TimeSpan maxAge)
+    {
+        var cutoffTime = DateTime.Now - maxAge;
+        
+        // Lazy evaluation - only checks files that match the pattern
+        var recentFiles = FileSearcher
+            .InDirectory(searchPath)
+            .WithPattern("*.*")
+            .Recursively()
+            .Where(file => File.GetLastWriteTime(file) > cutoffTime)
+            .OrderByDescending(file => File.GetLastWriteTime(file))
+            .ToList();
+        
+        Console.WriteLine($"Found {recentFiles.Count} files modified in the last {maxAge.TotalHours} hours");
+        return recentFiles;
+    }
+}
+```
+
+### Performance: Lazy vs Eager Evaluation
+
+```csharp
+using Cocoar.FileSystem;
+
+public class PerformanceExample
+{
+    public void LazyEvaluation()
+    {
+        // Lazy - no I/O happens until you iterate
+        var query = FileSearcher
+            .Search(@"C:\Windows", "*.dll")
+            .Recursively();
+        
+        // I/O happens here, but stops after finding 5 files
+        var firstFive = query.Take(5).ToList();
+        
+        Console.WriteLine("Only enumerated files until we found 5 matches");
+    }
+    
+    public void EagerEvaluation()
+    {
+        // Eager - ToList() forces full enumeration immediately
+        var allFiles = FileSearcher
+            .Search(@"C:\Program Files", "*.exe")
+            .Recursively()
+            .ToList();  // All files loaded into memory at once
+        
+        Console.WriteLine($"Loaded all {allFiles.Count} files into memory");
+    }
+}
+```

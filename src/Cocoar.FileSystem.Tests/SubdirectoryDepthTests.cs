@@ -1,3 +1,5 @@
+using Cocoar.FileSystem.Tests.TestUtilities;
+
 namespace Cocoar.FileSystem.Tests;
 
 /// <summary>
@@ -150,7 +152,7 @@ public sealed class SubdirectoryDepthTests : IDisposable
     public async Task IncludeSubdirectories_False_ShouldDisableRecursion()
     {
         // Arrange
-        var createdFiles = new List<string>();
+        var createdFiles = new HashSet<string>();
         var lockObj = new object();
 
         var monitor = ResilientFileSystemMonitor
@@ -170,7 +172,7 @@ public sealed class SubdirectoryDepthTests : IDisposable
         File.WriteAllText(Path.Combine(subDir, "nested.txt"), "nested");
         await Task.Delay(500);
 
-        // Assert - Only root file
+        // Assert - Only root file (use HashSet to handle macOS duplicate events)
         lock (lockObj)
         {
             Assert.Single(createdFiles);
@@ -250,7 +252,7 @@ public sealed class SubdirectoryDepthTests : IDisposable
     public async Task IncludeSubdirectories_WithDepth2_ShouldMonitorTwoLevels()
     {
         // Arrange
-        var createdFiles = new List<string>();
+        var createdFiles = new HashSet<string>();
         var lockObj = new object();
 
         var monitor = ResilientFileSystemMonitor
@@ -272,7 +274,14 @@ public sealed class SubdirectoryDepthTests : IDisposable
         File.WriteAllText(Path.Combine(level1, "l1.txt"), "l1");
         File.WriteAllText(Path.Combine(level2, "l2.txt"), "l2");
         File.WriteAllText(Path.Combine(level3, "l3.txt"), "l3"); // Too deep!
-        await Task.Delay(500);
+        
+        // Wait for expected events (3 files within depth limit)
+        await ActiveWaitHelpers.WaitUntilAsync(
+            () => { lock (lockObj) return createdFiles.Count >= 3; },
+            timeout: TimeSpan.FromSeconds(3));
+        
+        // Give extra time to ensure no unexpected 4th event arrives
+        await Task.Delay(300);
 
         // Assert
         lock (lockObj)
@@ -289,7 +298,7 @@ public sealed class SubdirectoryDepthTests : IDisposable
     public async Task IncludeSubdirectories_WithDepthNegative1_ShouldBeUnlimited()
     {
         // Arrange
-        var createdFiles = new List<string>();
+        var createdFiles = new HashSet<string>();
         var lockObj = new object();
 
         var monitor = ResilientFileSystemMonitor
@@ -315,7 +324,7 @@ public sealed class SubdirectoryDepthTests : IDisposable
         File.WriteAllText(Path.Combine(level4, "l4.txt"), "l4");
         await Task.Delay(500);
 
-        // Assert - All levels detected
+        // Assert - All levels detected (using HashSet to handle macOS duplicate events)
         lock (lockObj)
         {
             Assert.Equal(5, createdFiles.Count);

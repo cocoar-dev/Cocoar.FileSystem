@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2025-11-15
+
+### Added
+- **Folder Rename Detection** for `ResilientFileSystemMonitor`
+  - Automatically emits `Renamed` events when directories containing matching files are renamed
+  - No configuration needed - works out of the box for correctness
+  - Uses high-performance `FileSearcher` for efficient directory enumeration
+  - Respects `MaxDepth` and filter patterns when checking directory contents
+  - Useful for certificate rotation scenarios where entire folders are atomically renamed (e.g., `kid2-staging` → `kid2`)
+  - When a folder containing matching files is renamed, a single `Renamed` event is emitted with the folder path
+- **API Harmonization** for `FileSearcher` (matches `ResilientFileSystemMonitor` API)
+  - `.WithFilter(params string[])` - Search for multiple file patterns (e.g., `"*.cs", "*.csproj"`)
+  - `.ClearFilters()` - Remove all configured patterns
+  - `.IncludeSubdirectories(int maxDepth)` - Control recursion depth (0 = root only, -1 = unlimited)
+  - `.IncludeSubdirectories(bool)` - Enable/disable recursion (true = unlimited, false = root only)
+  - Additive behavior - calling `.WithFilter()` multiple times adds patterns
+  - All existing methods remain unchanged - fully backward compatible
+
 ## [2.1.0] - 2025-11-13
 
 ### Added

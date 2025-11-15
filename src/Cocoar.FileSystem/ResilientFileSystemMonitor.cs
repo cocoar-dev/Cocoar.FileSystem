@@ -241,11 +241,14 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         {
             StopFileSystemWatcher();
 
+            // Add DirectoryName to NotifyFilter to detect folder renames
+            var notifyFilter = _options.NotifyFilter | NotifyFilters.DirectoryName;
+
             _watcher = new FileSystemWatcher(_rootPath)
             {
                 Filter = _options.Filter,
                 IncludeSubdirectories = _options.IncludeSubdirectories,
-                NotifyFilter = _options.NotifyFilter,
+                NotifyFilter = notifyFilter,
                 InternalBufferSize = _options.InternalBufferSize,
                 EnableRaisingEvents = true
             };
@@ -326,10 +329,44 @@ public sealed class ResilientFileSystemMonitor : IDisposable
 
     private void OnFileRenamed(object sender, RenamedEventArgs e)
     {
+        // Check if this is a directory rename and IncludeFolderEvents is enabled
+        // Check existence of new path first (standard rename), then check attributes to determine if directory
+        var isDirectory = false;
+        var newPathExists = Directory.Exists(e.FullPath) || File.Exists(e.FullPath);
+        
+        if (newPathExists)
+        {
+            try
+            {
+                var attributes = File.GetAttributes(e.FullPath);
+                isDirectory = (attributes & FileAttributes.Directory) == FileAttributes.Directory;
+            }
+            catch
+            {
+                // If we can't get attributes, assume it's a file
+                isDirectory = Directory.Exists(e.FullPath);
+            }
+        }
+        
+        if (isDirectory)
+        {
+            // Check if directory contains files matching our patterns
+            if (DirectoryContainsMatchingFiles(e.FullPath))
+            {
+                // Emit the renamed event with the folder path
+                // The consumer can then rescan the folder or handle the rename appropriately
+                EnqueueEvent(new EventEntry(EventType.Renamed, e, RenamedArgs: e));
+            }
+            // Note: We don't update the index for directory renames since we track files, not folders
+            return;
+        }
+        
+        // Standard file rename handling
         lock (_gate)
         {
             _index.Remove(GetRelativePath(e.OldFullPath));
-            UpsertFile(e.FullPath);
+            if (!isDirectory)
+                UpsertFile(e.FullPath);
             _lastEventUtc = DateTime.UtcNow;
             _rollingDigest = BumpDigest(_rollingDigest);
         }
@@ -453,6 +490,35 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         var depth = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length - 1;
         
         return depth <= _options.MaxDepth;
+    }
+
+    private bool DirectoryContainsMatchingFiles(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+            return false;
+
+        try
+        {
+            var searchBuilder = FileSearcher.InDirectory(directoryPath);
+            
+            // Apply the same filters configured for the monitor
+            if (_options.Filters != null && _options.Filters.Length > 0)
+                searchBuilder = searchBuilder.WithFilter(_options.Filters);
+            else
+                searchBuilder = searchBuilder.WithPattern(_options.Filter);
+            
+            // Apply the same depth settings
+            if (_options.IncludeSubdirectories)
+                searchBuilder = searchBuilder.IncludeSubdirectories(_options.MaxDepth);
+            
+            // Lazy evaluation - stops on first match
+            return searchBuilder.Any();
+        }
+        catch
+        {
+            // If we can't enumerate the directory, assume it doesn't contain matching files
+            return false;
+        }
     }
 
     #endregion
