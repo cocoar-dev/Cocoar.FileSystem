@@ -12,3 +12,8 @@ local/
 *.nupkg
 *.snupkg
 .idea/
+
+# VitePress documentation
+website/node_modules/
+website/.vitepress/cache/
+website/.vitepress/dist/
