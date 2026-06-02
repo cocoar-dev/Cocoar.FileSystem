@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-06-02
+
+### Added
+- **Symlink Target Tracking** (opt-in) for `ResilientFileSystemMonitor`
+  - `.WithSymlinkTargetTracking()` — follows a watched symlink to its resolved final target and folds
+    that target into the change fingerprint, so an atomic symlink-target swap is detected and surfaced
+    as a `Changed` event on the user-visible (symlinked) path
+  - Enables hot-reload of Kubernetes **ConfigMap/Secret** volume mounts, which update content by an
+    atomic swap of the `..data` symlink rather than by rewriting the watched file
+  - **Off by default** — existing behavior is unchanged (symlinks/reparse points remain skipped); when
+    enabled, reparse-point entries are indexed and their resolved target is tracked
+  - Detected on both the audit (watching state) and polling-fallback paths; only the final target is
+    resolved (no recursion into it), so loop-safety is preserved and ordinary non-symlinked files incur
+    no extra cost
+  - Resolves the target's parent directory in addition to the link chain, so detection works
+    consistently on Linux/containers (where `File.ResolveLinkTarget` does not canonicalize intermediate
+    directory symlinks) as well as Windows
+
 ## [2.2.0] - 2025-11-15
 
 ### Added

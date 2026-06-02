@@ -48,7 +48,8 @@ public sealed class ResilientFileSystemMonitor : IDisposable
     internal sealed record FileMeta(
         long Length,
         DateTime LastWriteUtc,
-        FileAttributes Attributes
+        FileAttributes Attributes,
+        string? ResolvedTarget = null
     );
     
     /// <summary>
@@ -132,6 +133,16 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         public bool EnableAdaptiveHashOnReconcile { get; init; }
         
         public int AdaptiveHashBytesPerEdge { get; init; } = 64 * 1024;
+
+        /// <summary>
+        /// When enabled, the resolved final target of a watched symlink is folded into the
+        /// change fingerprint, so an atomic symlink-target swap (e.g. a Kubernetes ConfigMap
+        /// "..data" update) is detected during reconcile even when the target's length/mtime
+        /// are unchanged. Reparse-point entries are also indexed during snapshot enumeration
+        /// instead of being skipped. Only the final target is resolved (no recursion into it),
+        /// so loop-safety is preserved. Off by default.
+        /// </summary>
+        public bool TrackSymlinkTargets { get; init; }
     }
 
     /// <summary>
@@ -662,6 +673,14 @@ public sealed class ResilientFileSystemMonitor : IDisposable
             return true;
         }
 
+        // Symlink target swap: the resolved final target changed even though the link's own
+        // metadata did not (e.g. a Kubernetes ConfigMap atomic "..data" swap, where the new
+        // target can have identical length/mtime). Only populated when TrackSymlinkTargets is on.
+        if (!string.Equals(old.ResolvedTarget, current.ResolvedTarget, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         // Adaptive hashing (optional, off by default)
         if (_options.EnableAdaptiveHashOnReconcile)
         {
@@ -751,7 +770,11 @@ public sealed class ResilientFileSystemMonitor : IDisposable
                 RecurseSubdirectories = _options.IncludeSubdirectories,
                 MaxRecursionDepth = _options.MaxDepth < 0 ? int.MaxValue : _options.MaxDepth,
                 IgnoreInaccessible = true,
-                AttributesToSkip = FileAttributes.System | FileAttributes.ReparsePoint
+                // Skip reparse points by default (loop/escape safety). When symlink target
+                // tracking is on we index them so a watched symlink's target swap is detected.
+                AttributesToSkip = _options.TrackSymlinkTargets
+                    ? FileAttributes.System
+                    : FileAttributes.System | FileAttributes.ReparsePoint
             };
 
             // Handle multiple patterns
@@ -790,16 +813,22 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         return snapshot;
     }
 
-    private static bool TryStatFile(string fullPath, out FileMeta meta)
+    private bool TryStatFile(string fullPath, out FileMeta meta)
     {
         meta = default!;
-        
+
         try
         {
             var fi = new FileInfo(fullPath);
             if (fi.Exists && (fi.Attributes & FileAttributes.Directory) == 0)
             {
-                meta = new FileMeta(fi.Length, fi.LastWriteTimeUtc, fi.Attributes);
+                string? resolvedTarget = null;
+                if (_options.TrackSymlinkTargets && (fi.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    resolvedTarget = ResolveCanonicalTarget(fullPath);
+                }
+
+                meta = new FileMeta(fi.Length, fi.LastWriteTimeUtc, fi.Attributes, resolvedTarget);
                 return true;
             }
         }
@@ -807,8 +836,46 @@ public sealed class ResilientFileSystemMonitor : IDisposable
         {
             // File raced away or inaccessible
         }
-        
+
         return false;
+    }
+
+    /// <summary>
+    /// Resolves a symlink to its canonical final target path, following the link's own chain AND
+    /// canonicalizing the resolved target's parent directory.
+    /// </summary>
+    /// <remarks>
+    /// This extra parent-canonicalization is required because, on Unix,
+    /// <see cref="File.ResolveLinkTarget(string, bool)"/> with <c>returnFinalTarget: true</c> does
+    /// NOT canonicalize intermediate directory symlinks contained in the resolved target path: for
+    /// a Kubernetes ConfigMap layout (config.json -&gt; ..data/config.json) it returns
+    /// "&lt;mount&gt;/..data/config.json" — a string that is stable across an atomic "..data" swap,
+    /// which would make the update invisible. Resolving the parent ("..data") yields the changing
+    /// "&lt;mount&gt;/..&lt;timestamp&gt;" component, so the swap is detected. On Windows
+    /// ResolveLinkTarget already returns the fully canonical path and this is a no-op refinement.
+    /// Returns null if the entry is not a link or its target is currently unresolvable (e.g. a
+    /// transient dangling state mid-swap).
+    /// </remarks>
+    private static string? ResolveCanonicalTarget(string linkPath)
+    {
+        try
+        {
+            var final = File.ResolveLinkTarget(linkPath, returnFinalTarget: true)?.FullName;
+            if (final == null)
+                return null;
+
+            var dir = Path.GetDirectoryName(final);
+            if (dir == null)
+                return final;
+
+            var canonicalDir = Directory.ResolveLinkTarget(dir, returnFinalTarget: true)?.FullName ?? dir;
+            return Path.Combine(canonicalDir, Path.GetFileName(final));
+        }
+        catch
+        {
+            // Dangling/inaccessible target mid-swap: treat as unresolved.
+            return null;
+        }
     }
 
     private static ulong ComputeDigest(Dictionary<string, FileMeta> index)
@@ -847,6 +914,17 @@ public sealed class ResilientFileSystemMonitor : IDisposable
                 for (int i = 0; i < 4; i++)
                 {
                     hash ^= (byte)(attr >> (i * 8));
+                    hash *= prime;
+                }
+            }
+
+            // Hash resolved symlink target (only present when target tracking is enabled),
+            // so the audit detects a target swap whose metadata is otherwise unchanged.
+            if (kv.Value.ResolvedTarget is { } resolvedTarget)
+            {
+                foreach (char c in resolvedTarget)
+                {
+                    hash ^= c;
                     hash *= prime;
                 }
             }

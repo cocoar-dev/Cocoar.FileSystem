@@ -19,6 +19,7 @@ public sealed class MonitorBuilder
     private int _internalBufferSize = 64 * 1024;
     private bool _enableAdaptiveHashOnReconcile;
     private int _adaptiveHashBytesPerEdge = 64 * 1024;
+    private bool _trackSymlinkTargets;
     
     private EventHandler<FileSystemEventArgs>? _created;
     private EventHandler<FileSystemEventArgs>? _changed;
@@ -226,6 +227,23 @@ public sealed class MonitorBuilder
         return this;
     }
 
+    /// <summary>
+    /// Enables symlink target tracking. When enabled, the monitor follows a watched symlink to
+    /// its final target and folds that resolved target into the change fingerprint, so an atomic
+    /// symlink-target swap (e.g. a Kubernetes ConfigMap/Secret "..data" update) is detected and
+    /// surfaced as a Changed event on the user-visible (symlinked) path. Off by default.
+    /// </summary>
+    /// <remarks>
+    /// Only the final target is resolved; the monitor does not recurse into it, so loop-safety is
+    /// preserved. Resolution happens only for reparse-point entries, so ordinary (non-symlinked)
+    /// files incur no extra cost. Primarily relevant on Linux/container hosts.
+    /// </remarks>
+    public MonitorBuilder WithSymlinkTargetTracking()
+    {
+        _trackSymlinkTargets = true;
+        return this;
+    }
+
     public MonitorBuilder OnCreated(EventHandler<FileSystemEventArgs> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -289,7 +307,8 @@ public sealed class MonitorBuilder
             NotifyFilter = _notifyFilter,
             InternalBufferSize = _internalBufferSize,
             EnableAdaptiveHashOnReconcile = _enableAdaptiveHashOnReconcile,
-            AdaptiveHashBytesPerEdge = _adaptiveHashBytesPerEdge
+            AdaptiveHashBytesPerEdge = _adaptiveHashBytesPerEdge,
+            TrackSymlinkTargets = _trackSymlinkTargets
         };
 
         var monitor = new ResilientFileSystemMonitor(options);
