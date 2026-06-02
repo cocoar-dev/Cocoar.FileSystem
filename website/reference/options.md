@@ -21,6 +21,7 @@ All configuration options for the monitor.
 | `InternalBufferSize` | `int` | 65536 (64 KB) | FileSystemWatcher buffer size |
 | `EnableAdaptiveHashOnReconcile` | `bool` | `false` | Enable content hashing on audit |
 | `AdaptiveHashBytesPerEdge` | `int` | 65536 (64 KB) | Bytes to hash from file start/end |
+| `TrackSymlinkTargets` | `bool` | `false` | Detect a watched symlink's resolved-target swap (ConfigMap/Secret reload) |
 
 ## Depth Values
 
@@ -67,6 +68,7 @@ Available flags from `System.IO.NotifyFilters`:
 | `WithHealthCheckInterval(...)` | `HealthCheckInterval` |
 | `WithAuditInterval(...)` | `AuditInterval` |
 | `WithAdaptiveHashing(...)` | `EnableAdaptiveHashOnReconcile` + `AdaptiveHashBytesPerEdge` |
+| `WithSymlinkTargetTracking()` | `TrackSymlinkTargets` |
 
 ## Example: Full Options
 
@@ -87,6 +89,7 @@ var options = new ResilientFileSystemMonitor.Options
     InternalBufferSize = 65536,
     EnableAdaptiveHashOnReconcile = false,
     AdaptiveHashBytesPerEdge = 65536,
+    TrackSymlinkTargets = false,
 };
 
 var monitor = new ResilientFileSystemMonitor(options);

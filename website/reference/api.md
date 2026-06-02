@@ -62,6 +62,7 @@ Fluent API for configuring `ResilientFileSystemMonitor`.
 | `WithHealthCheckInterval(TimeSpan)` | `MonitorBuilder` | Set health check interval |
 | `WithAuditInterval(TimeSpan)` | `MonitorBuilder` | Set audit interval |
 | `WithAdaptiveHashing(int)` | `MonitorBuilder` | Enable content hashing |
+| `WithSymlinkTargetTracking()` | `MonitorBuilder` | Detect symlink target swaps (ConfigMap reload) |
 | `OnCreated(EventHandler)` | `MonitorBuilder` | Subscribe to Created |
 | `OnChanged(EventHandler)` | `MonitorBuilder` | Subscribe to Changed |
 | `OnDeleted(EventHandler)` | `MonitorBuilder` | Subscribe to Deleted |

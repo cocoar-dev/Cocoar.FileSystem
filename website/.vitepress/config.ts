@@ -55,6 +55,7 @@ export default withMermaid(
               { text: 'Depth Control', link: '/guide/monitor/depth-control' },
               { text: 'Multiple Patterns', link: '/guide/monitor/multiple-patterns' },
               { text: 'Folder Rename Detection', link: '/guide/monitor/folder-rename' },
+              { text: 'Symlink Target Tracking', link: '/guide/monitor/symlink-target-tracking' },
               { text: 'Debouncing', link: '/guide/monitor/debouncing' },
               { text: 'Adaptive Hashing <span class="badge-adv" title="Advanced topic"></span>', link: '/guide/monitor/adaptive-hashing' },
             ],
