@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-06-02
+
+### Added
+- **Symlink Target Tracking** (opt-in) for `ResilientFileSystemMonitor`
+  - `.WithSymlinkTargetTracking()` — detects when a watched symlink's resolved target swaps
+  - Enables hot-reload of Kubernetes ConfigMap/Secret mounts (atomic `..data` symlink swap)
+  - Surfaced as a `Changed` event on the user-visible (symlinked) path
+  - **Off by default** — existing behavior unchanged; detected on both the audit and polling-fallback paths
+  - Only the final target is resolved (loop-safe); resolution runs only for symlink entries, so ordinary files incur no extra cost
+  - Works consistently on Linux/containers and Windows (also canonicalizes the target's parent directory)
+
 ## [2.2.0] - 2025-11-15
 
 ### Added
